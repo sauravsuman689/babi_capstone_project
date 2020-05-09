@@ -1,5 +1,5 @@
 ---
-title: "R Notebook"
+title: "Twitter tweets scraping code"
 output:
   word_document: default
   html_notebook: default
@@ -27,28 +27,28 @@ library(tm)
 
 ```
 
-
+#### Add you secret token and consumer keys under each variable mentioned below
+#### Edit the application name which you created under twitter developers account
 ```{r}
 #setwd("F:/Saurav/Study/GL-Class/Capstone/Sentiment Analysis/twitter_data/project_data")
 
-consumer_key = "ocPFL55Ofksi4cpKX6nNH6PjW"
-consumer_secret = "TNeZzMLSbhYnFQWrImcJC6sWhPuX9rtQmA0R9FnjsK2dfDENh3"
-access_token = "1176408233864351745-wUD8M8LD2SyR0b8wy1MgzewvdxjBMy"
-access_secret ="IKPXzVpkvIq9X49siwAyKpbaesBA3AGL0tnvRvSKMqHX6"
+consumer_key = "xxxxx"
+consumer_secret = "xxxxx"
+access_token = "xxxxxx"
+access_secret ="xxxxx"
 application_name = "capstone_pro_senti"
 
 twitter_token <- create_token(app = application_name,consumer_key = consumer_key,consumer_secret = consumer_secret,access_token = access_token,  access_secret = access_secret)
 
 ```
 
+#### Edit the movie name in below code to scrape the data of that movie
 ```{r}
 
 #searchString <- "#LoveAajKal OR #loveaajkal"
-#searchString <- "#Shikara"
-
-searchString <- "#Sooryavanshi"
-
 #searchString <- "#Baaghi3"
+
+searchString <- "#Tanhaji"
 
 numberOfTweets <- 100000
 
@@ -56,7 +56,7 @@ tweets_data = search_tweets(searchString, n = numberOfTweets, lang = "en", retry
 
 ```
 
-
+#### Save the data into a data frame
 ```{r}
 
 #dabangg3.df <- twListToDF(tweets.df)
@@ -65,6 +65,7 @@ tweets.df <- as.data.frame(tweets_data)
 
 ```
 
+#### Viw first and last 6 observations of the dataset 
 ```{r}
 
 head(tweets.df)
@@ -73,17 +74,12 @@ tail(tweets.df)
 
 ```
 
-
+#### Write the data into a csv file
 ```{r}
 
 twitter.movie.df <- data.frame(lapply(tweets.df, as.character), stringsAsFactors=FALSE)
 
-```
 
-```{r}
-
-#write.csv(twitter.movie.df,"F:/Saurav/Study/GL-Class/Capstone/Sentiment Analysis/twitter_data/project_data/Baaghi3_set1.csv")
-
-write.csv(twitter.movie.df,"F:/Saurav/Study/GL-Class/Capstone/Sentiment Analysis/twitter_data/project_data/Sooryavanshi/Sooryavanshi_set3.csv")
+write.csv(twitter.movie.df,"F:/Saurav/Study/GL-Class/Capstone/Sentiment Analysis/twitter_data/project_data/Tanhaji/Tanhaji_set1.csv")
 
 ```
