@@ -1,0 +1,2554 @@
+---
+title: "Capstone Project Code - Pre and Post release sentiment analysis of upcoming movies"
+author: "Saurav Suman,Anurag Kedia,Neha Tiwary,Divya Thomas,Peehu (Group 8)"
+output:
+  html_document:
+    df_print: paged
+  word_document: default
+always_allow_html: yes
+---
+
+PRE-REQUISITE :
+
+1. All the scraped data files of the movie.
+2. Movie Name
+3. Movie Release date
+
+#### Install the required R packages and load the libraries 
+```{r}
+#install.packages("twitteR")
+#install.packages("RCurl")
+#install.packages("httr")
+#install.packages("syuzhet")
+#install.packages("rtweet")
+#install.packages("forestmangr")
+#install.packages("tidytext")
+#install.packages("slam")
+#install.packages("ggpubr")
+#install.packages("textstem")
+#install.packages("naivebayes")
+#install.packages("caret")
+library(textstem)
+library(twitteR)
+library(rtweet)
+library(RCurl)
+library(httr)
+library(tm)
+library(wordcloud)
+library(syuzhet)
+library(dplyr)
+library(forestmangr)
+library(tidytext)
+library(slam)
+library(ggplot2)
+library(RWeka)
+library(scales)
+library(ggpubr)
+library(naivebayes)
+library(caret)
+```
+
+#### Combine all the scraped data into one file
+```{r}
+
+#setwd("F:/Saurav/Study/GL-Class/Capstone/Sentiment Analysis/twitter_data/project_data/Baaghi3")
+
+#tweet1 <- read.csv("B3 01032020.csv",stringsAsFactors = FALSE)
+#tweet2 <- read.csv("B3 03032020.csv",stringsAsFactors = FALSE)
+#tweet3 <- read.csv("B3 07032020.csv",stringsAsFactors = FALSE)
+#tweet4 <- read.csv("B3 10032020.csv",stringsAsFactors = FALSE)
+#tweet5 <- read.csv("B3 11032020.csv",stringsAsFactors = FALSE)
+#tweet6 <- read.csv("B3 12032020.csv",stringsAsFactors = FALSE)
+#tweet7 <- read.csv("B3 13032020.csv",stringsAsFactors = FALSE)
+#tweet8 <- read.csv("B3 16032020.csv",stringsAsFactors = FALSE)
+#tweet9 <- read.csv("B3 17032020.csv",stringsAsFactors = FALSE)
+#tweet10 <- read.csv("B3 18032020.csv",stringsAsFactors = FALSE)
+#tweet11 <- read.csv("B3 20032020.csv",stringsAsFactors = FALSE)
+#tweet12 <- read.csv("B3 25022020.csv",stringsAsFactors = FALSE)
+#tweet13 <- read.csv("B3 26022020.csv",stringsAsFactors = FALSE)
+#tweet14 <- read.csv("B3 27022020.csv",stringsAsFactors = FALSE)
+#tweet15 <- read.csv("B3 29022020.csv",stringsAsFactors = FALSE)
+
+
+#Baaghi3_all <- rbind(tweet1,tweet2,tweet3,tweet4,tweet5,tweet6,tweet7,tweet8,tweet9,tweet10,tweet11,tweet12,tweet13,tweet14,tweet15,header=T)
+
+#write.csv(Baaghi3_all,"Baaghi3_all.csv")
+
+```
+
+
+#### Read the final dataset of the movie
+```{r}
+
+setwd("F:/Saurav/Study/GL-Class/Capstone/Sentiment Analysis/Code/working")
+
+movie_tweets_data_all <- read.csv("tanhaji_all.csv",stringsAsFactors = FALSE)
+
+head(movie_tweets_data_all)
+
+tail(movie_tweets_data_all)
+
+```
+
+
+#### Remove duplicate rows from the dataframe based on screen_name and text column
+```{r}
+
+movie_tweets_data <- distinct(movie_tweets_data_all,screen_name,text,.keep_all= TRUE)
+
+```
+
+
+#### Sort the dataset in assending order with date
+```{r}
+
+movie_tweets_data <- movie_tweets_data %>%
+   arrange(created_at)
+
+head(movie_tweets_data)
+
+tail(movie_tweets_data)
+
+```
+
+#### Creating the movie name & date variable for pre and post dates of the moview release
+#### Edit the Movie name and Release date of the movie in MM/DD/YYYY format for every new movie
+```{r}
+
+movie_name = "Tanhaji"
+
+#Tanhaji release date - 01/09/2020
+#LoveAajKal release date - 02/14/2020
+#Dabangg3 release date - 12/20/2019
+#GoodNewwz release date - 12/27/2019
+#Baaghi3 release date - 03/06/2020
+
+release_date <- as.Date("01/09/2020", format = "%m/%d/%Y")
+release_date
+
+pre_last_week_date <- release_date - 7
+pre_last_week_date
+
+post_first_week_date <- release_date + 7
+post_first_week_date
+
+```
+
+
+
+## MOVIE PRE RELEASE ANALYSIS:
+
+#### Filter the pre release data from the dataset
+```{r}
+
+pre_tweets_data_ndays <- movie_tweets_data %>%
+                filter(created_at >= pre_last_week_date & created_at < release_date)
+
+
+```
+
+#### Extract random 20,000 observations from the pre tweet data for analysis
+```{r}
+#model_data <- sparse_tw_new.df %>% sample_frac(0.10)
+
+pre_tweets_data <- sample_n(pre_tweets_data_ndays, 20000)
+
+dim(pre_tweets_data)
+
+```
+
+
+```{r}
+head(pre_tweets_data)
+
+tail(pre_tweets_data)
+```
+
+```{r}
+head(pre_tweets_data$text)
+```
+
+
+### CLEANING THE PRE RELEASE DATA
+```{r}
+
+pre_tweets_data$text = gsub("&amp", "", pre_tweets_data$text)
+pre_tweets_data$text = gsub("&amp", "", pre_tweets_data$text)
+pre_tweets_data$text = gsub("rt|RT", "", pre_tweets_data$text) # remove Retweet
+pre_tweets_data$text = iconv(pre_tweets_data$text, "latin1", "ASCII", sub="") # Remove emojis/dodgy unicode
+pre_tweets_data$text = gsub("<(.*)>", "", pre_tweets_data$text) # Remove pesky Unicodes like <U+A>
+pre_tweets_data$text = gsub("https(.*)*$", "", pre_tweets_data$text) # remove tweet URL
+pre_tweets_data$text = gsub("#\\S+", "", pre_tweets_data$text) # remove Hashtags
+pre_tweets_data$text = gsub("www[[:alnum:][:punct:]]*","",   tolower(pre_tweets_data$text ))
+pre_tweets_data$text = gsub("<.*?>", "", pre_tweets_data$text) # remove html tags
+pre_tweets_data$text = gsub("@\\w+", "", pre_tweets_data$text) # remove (@) Mentions 
+pre_tweets_data$text = gsub("[[:punct:]]", " ", pre_tweets_data$text) # remove punctuation
+pre_tweets_data$text = gsub("\r?\n|\r", " ", pre_tweets_data$text) # remove /n
+pre_tweets_data$text = gsub("[[:digit:]]", " ", pre_tweets_data$text) # remove numbers/Digits
+pre_tweets_data$text = gsub(" [a-z|A-Z] ", " ", pre_tweets_data$text)
+pre_tweets_data$text = gsub("[ |\t]{2,}", " ", pre_tweets_data$text) # remove tabs
+pre_tweets_data$text = gsub("^ ", "", pre_tweets_data$text)  # remove blank spaces at the beginning
+pre_tweets_data$text = gsub(" $", "", pre_tweets_data$text) # remove blank spaces at the end 
+pre_tweets_data$text = lemmatize_strings(pre_tweets_data$text) # lemmatising the words
+
+head(pre_tweets_data$text,10)
+
+```
+
+
+#### Retrive orginal tweets
+```{r}
+# Remove retweets
+movie_tweets_original <- pre_tweets_data[pre_tweets_data$is_retweet==FALSE, ] 
+
+# Remove replies
+movie_tweets_original <- subset(movie_tweets_original, is.na(movie_tweets_original$reply_to_status_id)) 
+```
+
+#### Favorite_count (i.e. the number of likes) or retweet_count (i.e. the number of retweets)
+```{r}
+# favorite_count
+movie_tweets_original <- movie_tweets_original %>% arrange(-favorite_count)
+movie_tweets_original[1,5]
+
+#retweet_count
+movie_tweets_original <- movie_tweets_original %>% arrange(-retweet_count)
+movie_tweets_original[1,5]
+```
+
+#### Show the ration of replies/retweets/original tweets
+```{r}
+# dataset containing only the retweets and one containing only the replies.
+
+# Keeping only the retweets
+movie_retweets <- pre_tweets_data[pre_tweets_data$is_retweet==TRUE,]
+
+# Keeping only the replies
+movie_replies <- subset(pre_tweets_data, !is.na(pre_tweets_data$reply_to_status_id))
+
+```
+
+#### Create a separate data frame containing the number of original tweets, retweets, and replies
+```{r}
+
+# Creating a data frame
+
+original_count <- nrow(movie_tweets_original)
+retweets_count <- nrow(movie_retweets)
+replies_count <- nrow(movie_replies)
+
+movie_data <- data.frame(
+  category=c("Original", "Retweets", "Replies"),
+  count=c(original_count, retweets_count, replies_count )
+)
+
+```
+
+
+#### Plot the types of tweets (original,Replies,Retweets)
+```{r}
+
+# Adding columns 
+movie_data$fraction = movie_data$count / sum(movie_data$count)
+movie_data$percentage = movie_data$count / sum(movie_data$count) * 100
+movie_data$ymax = cumsum(movie_data$fraction)
+movie_data$ymin = c(0, head(movie_data$ymax, n=-1))
+
+# Rounding the movie_data to two decimal points
+movie_data <- round_df(movie_data, 2)
+
+# Specify what the legend should say
+Type_of_Tweet <- paste(movie_data$category, movie_data$percentage, "%")
+ggplot(movie_data, aes(ymax=ymax, ymin=ymin, xmax=4, xmin=3, fill=Type_of_Tweet)) +
+  geom_rect() +
+  coord_polar(theta="y") + 
+  xlim(c(2, 4)) +
+  theme_void() +
+  theme(legend.position = "right")
+```
+
+
+#### Show the source devices from where the tweets are published
+```{r}
+
+tw_app <- pre_tweets_data %>% 
+  select(source) %>% 
+  group_by(source) %>%
+  summarize(count=n())
+tw_app <- subset(tw_app, count > 1000)
+
+
+device_data <- data.frame(
+  category=tw_app$source,
+  count=tw_app$count
+)
+device_data$fraction = device_data$count / sum(device_data$count)
+device_data$percentage = device_data$count / sum(device_data$count) * 100
+device_data$ymax = cumsum(device_data$fraction)
+device_data$ymin = c(0, head(device_data$ymax, n=-1))
+device_data <- round_df(device_data, 2)
+Source <- paste(device_data$category, device_data$percentage, "%")
+ggplot(device_data, aes(ymax=ymax, ymin=ymin, xmax=4, xmin=3, fill=Source)) +
+  geom_rect() +
+  coord_polar(theta="y") + # Try to remove that to understand how the chart is built initially
+  xlim(c(2, 4)) +
+  theme_void() +
+  theme(legend.position = "right")
+```
+
+
+#### Plot the most frequest words in the tweets
+```{r}
+
+tweets <- movie_tweets_original %>%
+  select(text) %>%
+  unnest_tokens(word, text)
+tweets <- tweets %>%
+  anti_join(stop_words)
+
+stop_words2 <- tibble(word = c("cr", "friday", "fri", "watch", "screen", "bizz", "week","continue","movie","rate","bms","movie","day","film","tanhaji","sir","ajay","don"))
+
+tweets <- tweets %>%
+  anti_join(stop_words2)
+
+# gives a bar chart of the most frequent words found in the tweets
+tweets %>% 
+  count(word, sort = TRUE) %>%
+  top_n(20) %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(x = word, y = n)) +
+  geom_col() +
+  xlab(NULL) +
+  coord_flip() +
+  labs(y = "Count",
+       x = "Unique words",
+       title = "Most frequent words found in the tweets of the movie",
+       subtitle = "Stop words removed from the list")
+```
+
+#### Show the most frequestly used hashtag
+```{r}
+movie_tweets_original$hashtags <- as.character(movie_tweets_original$hashtags)
+movie_tweets_original$hashtags <- gsub("c\\(", "", movie_tweets_original$hashtags)
+set.seed(1234)
+wordcloud(movie_tweets_original$hashtags, min.freq=50, scale=c(2, 1), random.order=FALSE, rot.per=0.35, colors=brewer.pal(8, "Dark2"))
+
+```
+
+#### Show the accounts from which most retweets originates
+```{r}
+set.seed(1234)
+wordcloud(pre_tweets_data$retweet_screen_name, min.freq=100, scale=c(2, 0.5), random.order=FALSE, rot.per=0.25, 
+          colors=brewer.pal(8, "Dark2"))
+
+```
+
+#### Show the location from which most of the tweets belongs
+```{r}
+
+wordcloud(pre_tweets_data$location, min.freq=100, scale=c(2, 0.5), random.order=FALSE, rot.per=0.25, 
+          colors=brewer.pal(8, "Dark2"))
+
+#wordcloud(tweets_data$retweet_location, min.freq=500,colors=brewer.pal(8, "Dark2"))
+
+```
+
+#### Show the location from which most of the retweets belongs
+```{r}
+set.seed(1234)
+
+wordcloud(pre_tweets_data$retweet_location, min.freq=100, scale=c(2, 0.5), random.order=FALSE, rot.per=0.25, 
+          colors=brewer.pal(8, "Dark2"))
+
+```
+
+#### PERFORM A SENTIMENT ANALYSIS OF THE TWEETS FOR PRE RELEASE USING "syuzhet" PACKAGE
+```{r}
+# Converting tweets to ASCII to trackle strange characters
+tweets <- iconv(tweets, from="UTF-8", to="ASCII", sub="")
+
+
+ew_sentiment <- get_nrc_sentiment(tweets)
+sentimentscores<-data.frame(colSums(ew_sentiment[,]))
+names(sentimentscores) <- "Score"
+sentimentscores <- cbind("sentiment"=rownames(sentimentscores),sentimentscores)
+rownames(sentimentscores) <- NULL
+ggplot(data=sentimentscores,aes(x=sentiment,y=Score))+
+  geom_bar(aes(fill=sentiment),stat = "identity")+
+  theme(legend.position="none")+
+  xlab("Sentiments")+ylab("Scores")+
+  ggtitle("Overall sentiment based on scores using syuzhet - Pre Release")+
+  theme_minimal()
+
+```
+
+
+#### Create subset of tweets text
+```{r}
+
+set.seed(777) # Make process reproducible
+sub_blogs = pre_tweets_data$text[sample(length(pre_tweets_data$text),length(pre_tweets_data$text)*0.1)] # make subset
+
+```
+
+#### Creating a corpus and cleaning data
+```{r}
+sub_blogs_Corpus <- VCorpus(VectorSource(sub_blogs)) # Make corpus
+sub_blogs_Corpus <- tm_map(sub_blogs_Corpus, stripWhitespace) # Remove unneccesary white spaces
+sub_blogs_Corpus <- tm_map(sub_blogs_Corpus, removePunctuation) # Remove punctuation
+sub_blogs_Corpus <- tm_map(sub_blogs_Corpus, removeNumbers) # Remove numbers
+sub_blogs_Corpus <- tm_map(sub_blogs_Corpus, tolower) # Convert to lowercase
+sub_blogs_Corpus <- tm_map(sub_blogs_Corpus, PlainTextDocument) # Plain text
+sub_blogs_Corpus <- tm_map(sub_blogs_Corpus, removeWords , c(stopwords("english"),                                                             "watch","boycott","chhapaak","like","just","yes","know",
+                  "will","ticket","book","people","friday","atleast","countri","program","dhamaal",
+                  "tanhaji","retweet","golmaal","boy","film","just","acid","bollywood","instead",
+                  "prefer","public","hungri","going","chameleon","show","now","let","day","bms",
+                  "cr","go","watch","r","like","if","forget","rate","movie","theater,","set","accept",
+                  "also","malusare"))
+                 # Remove english stop words
+
+```
+
+#### Tokenizing, calculating frequencies and making plots of n-grams
+```{r}
+n_grams_plot <- function(n, data) {
+  options(mc.cores=1)
+  
+  # Builds n-gram tokenizer 
+  tk <- function(x) NGramTokenizer(x, Weka_control(min = n, max = n))
+  
+  # Create matrix
+  ngrams_matrix <- TermDocumentMatrix(data, control=list(tokenize=tk))
+  
+  # make matrix for easy view
+  ngrams_matrix <- as.matrix(rollup(ngrams_matrix, 2, na.rm=TRUE, FUN=sum))
+  ngrams_matrix <- data.frame(word=rownames(ngrams_matrix), freq=ngrams_matrix[,1])
+  
+  # find 20 most frequent n-grams in the matrix
+  ngrams_matrix <- ngrams_matrix[order(-ngrams_matrix$freq), ][1:20, ]
+  ngrams_matrix$word <- factor(ngrams_matrix$word, as.character(ngrams_matrix$word))
+  
+  # plots
+  ggplot(ngrams_matrix, aes(x=word, y=freq)) + 
+    geom_bar(stat="Identity", fill="pink", colour="black") + 
+    theme(axis.text.x = element_text(angle = 90, hjust = 1)) + xlab("n-grams") + 
+    ylab("Frequency")
+}
+```
+
+#### Plot of frequency distribution of 1-gram
+```{r}
+n_grams_plot(n=1, data=sub_blogs_Corpus)
+```
+
+#### Plot of frequency distribution of 2-gram
+```{r}
+n_grams_plot(n=2, data=sub_blogs_Corpus)
+```
+
+#### Plot of frequency distribution of 3-gram
+```{r}
+n_grams_plot(n=3, data=sub_blogs_Corpus)
+```
+
+#### Plot of frequency distribution of 4-gram
+```{r}
+n_grams_plot(n=4, data=sub_blogs_Corpus)
+```
+
+```{r}
+head(pre_tweets_data$text,5)
+```
+
+
+#### Create the Corpus and DTM(Document Term Matrix)
+```{r}
+
+corpus_tw = Corpus(VectorSource(pre_tweets_data$text))
+
+corpus_tw = tm_map(corpus_tw, tolower)
+
+corpus_tw = tm_map(corpus_tw, removePunctuation)
+
+corpus_tw = tm_map(corpus_tw, content_transformer(removeNumbers))
+
+#add stopwords
+#stopwords are words which do not contain much significance.
+#Identify the words in the tweets which can be filtered out because they return vast amount of unnecessary information.
+tw_stopwords <- c(stopwords("english"),"watch","boycott","chhapaak","like","just","yes","know",
+                  "will"," ticket ","ticket","book","people"," book ",
+                  "friday","atleast","countri","program","dhamaal",
+                  "tanhaji","retweet","golmaal","boy","film","just","acid","bollywood","instead","prefer",
+                  "public","hungri","going","week","chameleon","show","now","let","day","bms","cr",
+                  "imdb","go","watch","r","like","if",
+                  "forget","rate","movie","theater,","set","accept","also","malusare","don")
+
+#remove stopwords
+corpus_tw <- tm_map(corpus_tw,removeWords,tw_stopwords)
+
+
+dtm_tw = DocumentTermMatrix(corpus_tw)
+
+sparse_tw = removeSparseTerms(dtm_tw, 0.995)
+
+
+sparse_tw.df = as.data.frame(as.matrix(sparse_tw))
+
+colnames(sparse_tw.df) = make.names(colnames(sparse_tw.df))
+
+
+```
+
+#### Get the polarity score of each tweet using get_sentiment funcation (syuzhet package)
+```{r}
+
+score_value_pre <- get_sentiment(pre_tweets_data$text)
+
+
+boxplot(score_value_pre,horizontal = TRUE)
+
+```
+
+
+#### Classify the tweets based on the scores provided by get_sentiment function into 5 categories.
+```{r}
+
+class_sentiment <- ifelse(score_value_pre < 0, "Flop", ifelse(score_value_pre == 0 , "Ignore",
+                              ifelse(score_value_pre > 0 & score_value_pre < 0.6, "Average",
+                                     ifelse(score_value_pre >=0.6 & score_value_pre < 1.25 ,"Hit",
+                                      ifelse(score_value_pre >= 1.25 & score_value_pre < 2.5 
+                                             ,"Superhit","Blockbuster")))))
+                            
+
+sparse_tw.df$Polarity = class_sentiment
+
+table(sparse_tw.df$Polarity)
+
+```
+
+#### Remove the Ignore category form the target class as it's has score=0 beacuse they are neutral words and will not help in our sentiment analysis.
+```{r}
+sparse_tw_new.df <- filter(sparse_tw.df, Polarity != "Ignore")
+
+table(sparse_tw_new.df$Polarity)
+
+```
+
+#### Plot the target class to see the frequecy of each class
+```{r}
+df <- sparse_tw_new.df %>%
+  group_by(Polarity) %>%
+  summarise(counts = n())
+
+ggplot(df, aes(x = Polarity , y= counts , fill=Polarity)) +
+  geom_bar(stat = "identity",width=0.8) +
+  geom_text(aes(label = counts), vjust = -0.2) + 
+  theme_pubclean()
+```
+
+#### Plot the target class to see the proprtion of each class
+```{r}
+
+ggplot(sparse_tw_new.df, aes(x = as.factor(Polarity) , fill=Polarity)) +
+  geom_bar(aes(y = (..count..)/sum(..count..)),width=0.8) +
+  geom_text(aes(y = ((..count..)/sum(..count..)), label = scales::percent((..count..)/sum(..count..))), stat = "count", vjust = -0.25) +
+  scale_y_continuous(labels = percent) +
+  labs(title = "Movie Ratings", y = "Percent", x = "Ratings")
+```
+
+
+### BUILD CLASSIFICATION MODELS AND PREDICT ON TEST DATA FOR PRE RELEASE ANALYSIS
+
+We will use different classification models and check its accuracy and performance.
+Polarity will be the dependant variable.
+
+```{r}
+prop.table(table(sparse_tw_new.df$Polarity))
+```
+
+```{r}
+table(sparse_tw_new.df$Polarity)
+```
+
+#### Extract random 4000 observations from the DTM 
+```{r}
+#model_data <- sparse_tw_new.df %>% sample_frac(0.10)
+model_data <- sample_n(sparse_tw_new.df, 4000)
+dim(model_data)
+
+```
+
+#### Split the data into Train and Test
+```{r}
+library(caTools)
+
+set.seed(777)
+
+model_data$Polarity <- as.factor(model_data$Polarity)
+
+spl = sample.split(model_data$Polarity, SplitRatio = 0.7)
+
+train_data = subset(model_data, spl == TRUE)
+test_data = subset(model_data, spl == FALSE)
+
+prop.table(table(train_data$Polarity))
+prop.table(table(test_data$Polarity))
+
+
+```
+
+
+#### Build CART Model
+```{r}
+# Load the Libraries
+library(rpart)
+library(rpart.plot)
+
+movie_cart_model = rpart(Polarity ~ ., data=train_data, method="class",minsplit = 60,
+                         minbucket = 20 , cp = 0.01)
+
+#CART Diagram
+prp(movie_cart_model, extra=2)
+```
+
+
+#### Predict and Evaluate the Performance of CART train data
+```{r}
+predict_cart_train_pre = predict(movie_cart_model, data=train_data, type="class")
+
+# Evaluate the performance - Confusion matrix :
+confusion_matrix_cart <- table(train_data$Polarity, predict_cart_train_pre)
+confusion_matrix_cart
+
+# Baseline accuracy
+accuracy_cart_train_pre = sum(diag(confusion_matrix_cart))/sum(confusion_matrix_cart)
+accuracy_cart_train_pre
+
+```
+
+#### Predict and Evaluate the Performance of CART on test data
+```{r}
+predict_cart_test_pre = predict(movie_cart_model, newdata=test_data, type="class")
+
+# Evaluate the performance - Confusion matrix :
+confusion_matrix_cart <- table(test_data$Polarity, predict_cart_test_pre)
+confusion_matrix_cart
+
+# Baseline accuracy
+accuracy_cart_test_pre = sum(diag(confusion_matrix_cart))/sum(confusion_matrix_cart)
+accuracy_cart_test_pre
+
+```
+
+
+#### AUC-ROC Curve for CART on Train and Test dataset
+```{r}
+
+library(pROC)
+
+#Train data - Plot ROC curve
+roc_obj_cart_train_pre <- multiclass.roc(as.numeric(train_data$Polarity),as.numeric(predict_cart_train_pre),quiet=TRUE)
+roc_obj_cart_train_pre
+
+#Test data - Plot ROC curve
+roc_obj_cart_test_pre <- multiclass.roc(as.numeric(test_data$Polarity),as.numeric(predict_cart_test_pre),quiet=TRUE)
+roc_obj_cart_test_pre
+
+
+```
+
+
+#### Comparison of all the performace measure of CART Model on Train and Test dataset
+```{r}
+results_cart_train_pre = data.frame(accuracy_cart_train_pre, as.numeric(roc_obj_cart_train_pre$auc))
+names(results_cart_train_pre) = c("ACCURACY", "AUC-ROC" )
+
+results_cart_test_pre = data.frame(accuracy_cart_test_pre,as.numeric(roc_obj_cart_test_pre$auc) )
+names(results_cart_test_pre) = c("ACCURACY", "AUC-ROC")
+
+
+df_fin =rbind(results_cart_train_pre, results_cart_test_pre)
+row.names(df_fin) = c('CART Train Pre', 'CART Test Pre')
+df_fin
+```
+
+#### Show the variable importance plot of the CART Model
+```{r}
+
+var_imp_cart_df <- as.data.frame(movie_cart_model$variable.importance)
+
+par(mar=c(7,4,3,2))
+plot(var_imp_cart_df$`movie_cart_model$variable.importance`, xlab="variable", 
+    ylab="Importance", xaxt = "n", pch=20)
+axis(1, at=1:length(var_imp_cart_df$`movie_cart_model$variable.importance`), labels=row.names(var_imp_cart_df),las=2)
+```
+
+
+#### Build Random Forest Model
+```{r}
+# Load Library
+library(randomForest)
+
+set.seed(777)
+
+movie_rf_model = randomForest(Polarity ~ ., data=train_data,importance=TRUE)
+movie_rf_model
+
+```
+
+#### Predict and Evaluate the Performance of Random Forest on train
+```{r}
+# Make predictions:
+predict_rf_train_pre = predict(movie_rf_model, data=train_data,type="response")
+
+# Evaluate the performance - Confusion matrix : 
+confusion_matrix_rf <- table(train_data$Polarity, predict_rf_train_pre)
+confusion_matrix_rf
+
+# Baseline accuracy:
+accuracy_rf_train_pre = sum(diag(confusion_matrix_rf))/sum(confusion_matrix_rf)
+accuracy_rf_train_pre
+
+```
+
+
+#### Predict and Evaluate the Performance of Random Forest on test data
+```{r}
+# Make predictions:
+predict_rf_test_pre = predict(movie_rf_model, newdata=test_data,type="response")
+
+# Evaluate the performance - Confusion matrix : 
+confusion_matrix_rf <- table(test_data$Polarity, predict_rf_test_pre)
+confusion_matrix_rf
+
+# Baseline accuracy:
+accuracy_rf_test_pre = sum(diag(confusion_matrix_rf))/sum(confusion_matrix_rf)
+accuracy_rf_test_pre
+
+```
+
+#### Variable Importance of Random Forest
+```{r}
+#Variable importance: 
+#varImpPlot(movie_rf_model,main='Variable Importance Plot: Movie ',type=2)
+varImpPlot(movie_rf_model,sort=TRUE,type=NULL, class=NULL, scale=TRUE,cex=.8)
+```
+
+### AUC-ROC Curve for CART on Train and Test dataset
+```{r}
+
+#Train data - Plot ROC curve
+roc_obj_rf_train_pre <- multiclass.roc(as.numeric(train_data$Polarity),as.numeric(predict_rf_train_pre),quiet=TRUE)
+roc_obj_rf_train_pre
+
+#Test data - Plot ROC curve
+roc_obj_rf_test_pre <- multiclass.roc(as.numeric(test_data$Polarity),as.numeric(predict_cart_test_pre),quiet=TRUE)
+roc_obj_rf_test_pre
+
+
+```
+
+
+### Comparison of all the performace measure of Random Forest Model on Train and Test dataset
+```{r}
+results_rf_train_pre = data.frame(accuracy_rf_train_pre, as.numeric(roc_obj_rf_train_pre$auc))
+names(results_rf_train_pre) = c("ACCURACY", "AUC-ROC" )
+
+results_rf_test_pre = data.frame(accuracy_rf_test_pre,as.numeric(roc_obj_rf_test_pre$auc) )
+names(results_rf_test_pre) = c("ACCURACY", "AUC-ROC")
+
+
+df_fin =rbind(results_rf_train_pre, results_rf_test_pre)
+row.names(df_fin) = c('Random Forest Train Pre', 'Random Forest Test Pre')
+df_fin
+```
+
+
+#### Build SVM Model
+```{r}
+
+movie_svm_model  <- train(Polarity ~ . , data = train_data, method='svmLinear' , trControl = trainControl("cv", number = 10), preProcess = c("center","scale")) 
+
+```
+
+#### Plot the variable imporatnce of SVM model
+```{r}
+
+plot(varImp(object=movie_svm_model),   main="SVM - Variable Importance", top = 15)
+
+```
+
+
+#### Predict and Evaluate the performance of SVM Model on train data
+```{r}
+# Make predictions:
+predict_svm_train_pre = predict(movie_svm_model, data=train_data, decision.values=TRUE)
+
+# Evaluate the performance - Confusion matrix :
+confusion_matrix_svm <- table(train_data$Polarity, predict_svm_train_pre)
+confusion_matrix_svm
+
+# Baseline accuracy:
+accuracy_svm_train_pre = sum(diag(confusion_matrix_svm))/sum(confusion_matrix_svm)
+accuracy_svm_train_pre
+
+```
+
+#### Predict and Evaluate the performance of SVM Model on test data
+```{r}
+# Make predictions:
+predict_svm_test_pre = predict(movie_svm_model, newdata=test_data,decision.values=TRUE)
+
+# Evaluate the performance - Confusion matrix :
+confusion_matrix_svm <- table(test_data$Polarity, predict_svm_test_pre)
+confusion_matrix_svm
+
+# Baseline accuracy:
+accuracy_svm_test_pre = sum(diag(confusion_matrix_svm))/sum(confusion_matrix_svm)
+accuracy_svm_test_pre
+
+```
+
+#### AUC-ROC Curve for SVM model on Train and Test dataset
+```{r}
+
+library(pROC)
+
+#Train data - Plot ROC curve
+roc_obj_svm_train_pre <- multiclass.roc(as.numeric(train_data$Polarity),as.numeric(predict_svm_train_pre),quiet=TRUE)
+roc_obj_svm_train_pre
+
+#Test data - Plot ROC curve
+roc_obj_svm_test_pre <- multiclass.roc(as.numeric(test_data$Polarity),as.numeric(predict_svm_test_pre),quiet=TRUE)
+roc_obj_svm_test_pre
+
+
+```
+
+#### Comparison of all the performace measure of SVM Model on Train and Test dataset
+```{r}
+results_svm_train_pre = data.frame(accuracy_svm_train_pre, as.numeric(roc_obj_svm_train_pre$auc))
+names(results_svm_train_pre) = c("ACCURACY", "AUC-ROC" )
+
+results_svm_test_pre = data.frame(accuracy_svm_test_pre,as.numeric(roc_obj_svm_test_pre$auc) )
+names(results_svm_test_pre) = c("ACCURACY", "AUC-ROC")
+
+
+df_fin =rbind(results_svm_train_pre, results_svm_test_pre)
+row.names(df_fin) = c('SVM Train Pre', 'SVM Test Pre')
+df_fin
+```
+
+
+#### Build Naive Bayes Model
+
+```{r}
+
+
+var_predictor_train <- as.matrix(train_data[,-which(names(train_data)=="Polarity")])
+var_dependent  <- as.factor(train_data$Polarity)
+
+
+
+movie_nb_model <- multinomial_naive_bayes(x = var_predictor_train, y = var_dependent, laplace = 1)
+summary(movie_nb_model)
+
+```
+
+
+
+#### Predict and Evaluate the performance of NB Model on train data
+```{r}
+# Make predictions:
+predict_nb_train_pre = predict(movie_nb_model,var_predictor_train, type = "class")
+
+# Evaluate the performance - Confusion matrix :
+confusion_matrix_nb <- table(train_data$Polarity, predict_nb_train_pre)
+confusion_matrix_nb
+
+# Baseline accuracy:
+accuracy_nb_train_pre = sum(diag(confusion_matrix_nb))/sum(confusion_matrix_nb)
+accuracy_nb_train_pre
+
+```
+
+#### Predict and Evaluate the performance of NB Model on test data
+```{r}
+
+var_predictor_test <- as.matrix(test_data[,-which(names(test_data)=="Polarity")])
+
+
+# Make predictions:
+predict_nb_test_pre = predict(movie_nb_model,newdata = var_predictor_test, type = "class")
+
+# Evaluate the performance - Confusion matrix :
+confusion_matrix_nb <- table(test_data$Polarity, predict_nb_test_pre)
+confusion_matrix_nb
+
+# Baseline accuracy:
+accuracy_nb_test_pre = sum(diag(confusion_matrix_nb))/sum(confusion_matrix_nb)
+accuracy_nb_test_pre
+
+```
+
+### AUC-ROC Curve for Naive Bayes model on Train and Test dataset
+```{r}
+
+library(pROC)
+
+#Train data - Plot ROC curve
+roc_obj_nb_train_pre <- multiclass.roc(as.numeric(train_data$Polarity),as.numeric(predict_nb_train_pre),quiet=TRUE)
+roc_obj_nb_train_pre
+
+#Test data - Plot ROC curve
+roc_obj_nb_test_pre <- multiclass.roc(as.numeric(test_data$Polarity),as.numeric(predict_nb_test_pre),quiet=TRUE)
+roc_obj_nb_test_pre
+
+
+```
+
+
+#### Comparison of all the performace measure of Naive Bayes Model on Train and Test dataset
+```{r}
+results_nb_train_pre = data.frame(accuracy_nb_train_pre, as.numeric(roc_obj_nb_train_pre$auc))
+names(results_nb_train_pre) = c("ACCURACY", "AUC-ROC" )
+
+results_nb_test_pre = data.frame(accuracy_nb_test_pre,as.numeric(roc_obj_nb_test_pre$auc) )
+names(results_nb_test_pre) = c("ACCURACY", "AUC-ROC")
+
+
+df_fin =rbind(results_nb_train_pre, results_nb_test_pre)
+row.names(df_fin) = c('Naive Bayes Train Pre', 'Naive Bayes Test Pre')
+df_fin
+```
+
+
+
+### Comparing all the models with their performance - Accuracy and AUC-ROC Value for Pre Release
+```{r}
+
+df_fin =rbind(results_cart_train_pre, results_cart_test_pre, results_rf_train_pre, results_rf_test_pre, results_svm_train_pre,results_svm_test_pre,results_nb_train_pre,results_nb_test_pre)
+
+row.names(df_fin) = c('CART Train Pre', 'CART Test Pre','Random Forest Train Pre','Random Forest Test Pre', 'SVM Train Pre','SVM Test Pre','Naive Bayes Train Pre','Naive Bayes Test Pre')
+
+#install.packages("kableExtra")
+library(kableExtra)
+
+kable(round(df_fin,2)) %>%
+    kable_styling(c("striped","bordered")) %>%
+    add_header_above(c(" ","Model Performance Comparison Metrics for Pre Release" = 2))
+
+```
+
+### WORD CLOUD OF THE TWEETED WORDS PRE RELEASE
+```{r}
+
+svm_test_data_pre <- cbind.data.frame(test_data, predicted=predict_svm_test_pre, stringsAsFactors = FALSE )
+
+```
+
+```{r}
+
+Flopset_pre <- subset.data.frame(svm_test_data_pre,svm_test_data_pre$predicted == "Flop")
+Averageset_pre <- subset.data.frame(svm_test_data_pre,svm_test_data_pre$predicted == "Average")
+Hitset_pre <- subset.data.frame(svm_test_data_pre,svm_test_data_pre$predicted == "Hit")
+Superhitset_pre <- subset.data.frame(svm_test_data_pre,svm_test_data_pre$predicted == "Superhit")
+Blockbusterset_pre <- subset.data.frame(svm_test_data_pre,svm_test_data_pre$predicted == "Blockbuster")
+
+```
+
+```{r}
+
+Flop.word.freq <- sort(colSums(as.matrix(select(Flopset_pre,-c(Polarity,predicted)))), decreasing= TRUE)
+
+Average.word.freq <- sort(colSums(as.matrix(select(Averageset_pre,-c(Polarity,predicted)))), decreasing= TRUE)
+
+Hit.word.freq <- sort(colSums(as.matrix(select(Hitset_pre,-c(Polarity,predicted)))), decreasing= TRUE)
+
+Superhit.word.freq <- sort(colSums(as.matrix(select(Superhitset_pre,-c(Polarity,predicted))))
+                                   , decreasing= TRUE)
+
+Blockbuster.word.freq <- sort(colSums(as.matrix(select(Blockbusterset_pre,-c(Polarity,predicted)))), decreasing= TRUE)
+
+```
+
+```{r}
+
+Flop.word.freq_df<- as.data.frame(Flop.word.freq)
+
+Average.word.freq_df<- as.data.frame(Average.word.freq)
+
+Hit.word.freq_df<- as.data.frame(Hit.word.freq)
+
+Superhit.word.freq_df<- as.data.frame(Superhit.word.freq)
+
+Blockbuster.word.freq_df<- as.data.frame(Blockbuster.word.freq)
+
+
+Flop.word.freq_df_valid <- subset.data.frame(Flop.word.freq_df,Flop.word.freq > 0 )
+         
+Average.word.freq_df_valid <- subset.data.frame(Average.word.freq_df,Average.word.freq > 0)                     
+Hit.word.freq_df_valid <- subset.data.frame(Hit.word.freq_df,Hit.word.freq > 0)
+
+Superhit.word.freq_df_valid <- subset.data.frame(Superhit.word.freq_df,Superhit.word.freq > 0)
+
+Blockbuster.word.freq_df_valid <- subset.data.frame(Blockbuster.word.freq_df,Blockbuster.word.freq > 0)
+
+
+```
+
+```{r}
+
+Flopset_pre_df <- as.data.frame(rownames(Flop.word.freq_df_valid))
+Averageset_pre_df <- as.data.frame(rownames(Average.word.freq_df_valid))
+Hitset_pre_df <- as.data.frame(rownames(Hit.word.freq_df_valid))
+Superhitset_pre_df <- as.data.frame(rownames(Superhit.word.freq_df_valid))
+Blockbusterset_pre_df <- as.data.frame(rownames(Blockbuster.word.freq_df_valid))
+
+names(Flopset_pre_df)[1] <- "Flop_words"
+names(Averageset_pre_df)[1] <- "Average_words"
+names(Hitset_pre_df)[1] <- "Hit_words"
+names(Superhitset_pre_df)[1] <- "Superhit_words"
+names(Blockbusterset_pre_df)[1] <- "Blockbuster_words"
+
+```
+
+```{r}
+Flopset_pre_df$Flop_words <- as.character(Flopset_pre_df$Flop_words)
+Averageset_pre_df$Average_words <- as.character(Averageset_pre_df$Average_words)
+Hitset_pre_df$Hit_words <- as.character(Hitset_pre_df$Hit_words)
+Superhitset_pre_df$Superhit_words <- as.character(Superhitset_pre_df$Superhit_words)
+Blockbusterset_pre_df$Blockbuster_words <- as.character(Blockbusterset_pre_df$Blockbuster_words)
+
+```
+
+
+```{r}
+
+Flopset_pre_score <- get_sentiment(Flopset_pre_df$Flop_words)
+Averageset_pre_score <- get_sentiment(Averageset_pre_df$Average_words)
+Hitset_pre_score <- get_sentiment(Hitset_pre_df$Hit_words)
+Superhitset_pre_score <- get_sentiment(Superhitset_pre_df$Superhit_words)
+Blockbusterset_pre_score <- get_sentiment(Blockbusterset_pre_df$Blockbuster_words)
+
+```
+
+
+```{r}
+
+Flopset_pre_df_score <- cbind.data.frame(Flopset_pre_df,score=Flopset_pre_score)
+Averageset_pre_df_score <- cbind.data.frame(Averageset_pre_df,score=Averageset_pre_score)
+Hitset_pre_df_score <- cbind.data.frame(Hitset_pre_df,score=Hitset_pre_score)
+Superhitset_pre_df_score <- cbind.data.frame(Superhitset_pre_df,score=Superhitset_pre_score)
+Blockbusterset_pre_df_score <- cbind.data.frame(Blockbusterset_pre_df,score=Blockbusterset_pre_score)
+
+```
+
+
+```{r}
+
+Flopset_pre_score_new <- subset.data.frame(Flopset_pre_df_score,score < 0.00)
+Averageset_pre_score_new <- subset.data.frame(Averageset_pre_df_score,score != 0.00)
+Hitset_pre_score_new <- subset.data.frame(Hitset_pre_df_score,score > 0.00)
+Superhitset_pre_score_new <- subset.data.frame(Superhitset_pre_df_score,score > 0.00)
+Blockbusterset_pre_score_new <- subset.data.frame(Blockbusterset_pre_df_score,score > 0.00)
+
+
+Flopset_pre_score_new$score <- abs(Flopset_pre_score_new$score*100)
+Averageset_pre_score_new$score <- abs(Averageset_pre_score_new$score*100)
+Hitset_pre_score_new$score <- Hitset_pre_score_new$score*100
+Superhitset_pre_score_new$score <- Superhitset_pre_score_new$score*100
+Blockbusterset_pre_score_new$score <- Blockbusterset_pre_score_new$score*100
+
+```
+
+
+#### Flop Category Word Cloud for Pre release
+```{r}
+
+pal<- brewer.pal(8, "Dark2")
+
+wordcloud(words = Flopset_pre_score_new$Flop_words, freq = Flopset_pre_score_new$score, min.freq = 10, random.order = F, scale=c(2, .5) , colors = pal, max.words = 1000)
+
+```
+
+#### Average Category Word Cloud for Pre release
+```{r}
+
+pal<- brewer.pal(8, "Dark2")
+
+wordcloud(words = Averageset_pre_score_new$Average_words, freq = Averageset_pre_score_new$score, min.freq = 25, scale=c(2, .5) , random.order = F, colors = pal, max.words = 1000)
+
+```
+
+#### Hit Category Word Cloud for Pre release
+```{r}
+
+pal<- brewer.pal(8, "Dark2")
+
+wordcloud(words = Hitset_pre_score_new$Hit_words, freq = Hitset_pre_score_new$score, min.freq = 25, random.order = F, scale=c(2, .5),colors = pal, max.words = 1000)
+
+
+```
+
+#### Superhit Category Word Cloud for Pre release
+```{r}
+
+pal<- brewer.pal(8, "Dark2")
+
+wordcloud(words = Superhitset_pre_score_new$Superhit_words, freq = Superhitset_pre_score_new$score, min.freq = 20,scale=c(2, .5), random.order = F, colors = pal, max.words = 1000)
+
+```
+
+#### Blockbuster Category Word Cloud for Pre release
+```{r}
+
+pal<- brewer.pal(8, "Dark2")
+wordcloud(words = Blockbusterset_pre_score_new$Blockbuster_words, freq = Blockbusterset_pre_score_new$score, min.freq = 20, random.order = F, scale=c(2, .5),colors = pal, max.words = 1000)
+
+```
+
+
+## POST MOVIE RELEASE ANALYSIS -
+
+#### Read the tweets from the dataset for post release
+```{r}
+
+post_tweets_data_ndays <- movie_tweets_data %>%
+                filter(created_at >= release_date & created_at < post_first_week_date)
+
+```
+
+
+#### Extract random 20,000 observations from the post tweet data
+```{r}
+#model_data <- sparse_tw_new.df %>% sample_frac(0.10)
+
+post_tweets_data <- sample_n(post_tweets_data_ndays, 20000)
+
+dim(post_tweets_data)
+
+```
+
+
+```{r}
+head(post_tweets_data)
+tail(post_tweets_data)
+
+```
+
+### CLEANING THE PRE RELEASE DATA
+```{r}
+
+post_tweets_data$text = gsub("&amp", "", post_tweets_data$text)
+post_tweets_data$text = gsub("&amp", "", post_tweets_data$text)
+post_tweets_data$text = gsub("rt|RT", "", post_tweets_data$text) # remove Retweet
+post_tweets_data$text = iconv(post_tweets_data$text, "latin1", "ASCII", sub="") # Remove emojis/dodgy unicode
+post_tweets_data$text = gsub("<(.*)>", "", post_tweets_data$text) # Remove pesky Unicodes like <U+A>
+post_tweets_data$text = gsub("https(.*)*$", "", post_tweets_data$text) # remove tweet URL
+post_tweets_data$text = gsub("#\\S+", "", post_tweets_data$text) # remove Hashtags
+post_tweets_data$text = gsub("www[[:alnum:][:punct:]]*","",   tolower(post_tweets_data$text ))
+post_tweets_data$text = gsub("<.*?>", "", post_tweets_data$text) # remove html tags
+post_tweets_data$text = gsub("@\\w+", "", post_tweets_data$text) # remove (@) Mentions 
+post_tweets_data$text = gsub("[[:punct:]]", " ", post_tweets_data$text) # remove punctuation
+post_tweets_data$text = gsub("\r?\n|\r", " ", post_tweets_data$text) # remove /n
+post_tweets_data$text = gsub("[[:digit:]]", " ", post_tweets_data$text) # remove numbers/Digits
+post_tweets_data$text = gsub(" [a-z|A-Z] ", " ", post_tweets_data$text)
+post_tweets_data$text = gsub("[ |\t]{2,}", " ", post_tweets_data$text) # remove tabs
+post_tweets_data$text = gsub("^ ", "", post_tweets_data$text)  # remove blank spaces at the beginning
+post_tweets_data$text = gsub(" $", "", post_tweets_data$text) # remove blank spaces at the end 
+post_tweets_data$text = lemmatize_strings(post_tweets_data$text) # lemmatising the words
+
+head(post_tweets_data$text,10)
+
+```
+
+#### Retrive orginal tweets
+```{r}
+# Remove retweets
+movie_tweets_original <- post_tweets_data[post_tweets_data$is_retweet==FALSE, ] 
+# Remove replies
+movie_tweets_original <- subset(movie_tweets_original, is.na(movie_tweets_original$reply_to_status_id)) 
+```
+
+#### favorite_count (i.e. the number of likes) or retweet_count (i.e. the number of retweets)
+```{r}
+# favorite_count
+movie_tweets_original <- movie_tweets_original %>% arrange(-favorite_count)
+movie_tweets_original[1,5]
+
+#retweet_count
+movie_tweets_original <- movie_tweets_original %>% arrange(-retweet_count)
+movie_tweets_original[1,5]
+```
+
+#### SHOW THE RATIO OF REPLIES/RETWEETS/ORIGINAL TWEETS
+```{r}
+# dataset containing only the retweets and one containing only the replies.
+
+# Keeping only the retweets
+movie_retweets <- post_tweets_data[post_tweets_data$is_retweet==TRUE,]
+
+# Keeping only the replies
+movie_replies <- subset(post_tweets_data, !is.na(post_tweets_data$reply_to_status_id))
+
+```
+
+#### Create a separate data frame containing the number of original tweets, retweets, and replies
+```{r}
+
+# Creating a data frame
+
+original_count <- nrow(movie_tweets_original)
+retweets_count <- nrow(movie_retweets)
+replies_count <- nrow(movie_replies)
+
+movie_data <- data.frame(
+  category=c("Original", "Retweets", "Replies"),
+  count=c(original_count, retweets_count, replies_count )
+)
+
+```
+
+#### Plot the types of tweets (original,Replies,Retweets)
+```{r}
+
+# Adding columns 
+movie_data$fraction = movie_data$count / sum(movie_data$count)
+movie_data$percentage = movie_data$count / sum(movie_data$count) * 100
+movie_data$ymax = cumsum(movie_data$fraction)
+movie_data$ymin = c(0, head(movie_data$ymax, n=-1))
+
+# Rounding the movie_data to two decimal points
+movie_data <- round_df(movie_data, 2)
+
+# Specify what the legend should say
+Type_of_Tweet <- paste(movie_data$category, movie_data$percentage, "%")
+ggplot(movie_data, aes(ymax=ymax, ymin=ymin, xmax=4, xmin=3, fill=Type_of_Tweet)) +
+  geom_rect() +
+  coord_polar(theta="y") + 
+  xlim(c(2, 4)) +
+  theme_void() +
+  theme(legend.position = "right")
+```
+
+#### Show the source devices from where the tweets are published
+```{r}
+
+tw_app <- pre_tweets_data %>% 
+  select(source) %>% 
+  group_by(source) %>%
+  summarize(count=n())
+tw_app <- subset(tw_app, count > 1000)
+
+device_data <- data.frame(
+  category=tw_app$source,
+  count=tw_app$count
+)
+device_data$fraction = device_data$count / sum(device_data$count)
+device_data$percentage = device_data$count / sum(device_data$count) * 100
+device_data$ymax = cumsum(device_data$fraction)
+device_data$ymin = c(0, head(device_data$ymax, n=-1))
+device_data <- round_df(device_data, 2)
+Source <- paste(device_data$category, device_data$percentage, "%")
+ggplot(device_data, aes(ymax=ymax, ymin=ymin, xmax=4, xmin=3, fill=Source)) +
+  geom_rect() +
+  coord_polar(theta="y") + # Try to remove that to understand how the chart is built initially
+  xlim(c(2, 4)) +
+  theme_void() +
+  theme(legend.position = "right")
+```
+
+
+#### Plot the most frequent words found in the tweets
+```{r}
+
+tweets <- movie_tweets_original %>%
+  select(text) %>%
+  unnest_tokens(word, text)
+tweets <- tweets %>%
+  anti_join(stop_words)
+
+tweets <- tweets %>%
+  anti_join(stop_words2)
+
+# gives a bar chart of the most frequent words found in the tweets
+tweets %>% 
+  count(word, sort = TRUE) %>%
+  top_n(20) %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(x = word, y = n)) +
+  geom_col() +
+  xlab(NULL) +
+  coord_flip() +
+  labs(y = "Count",
+       x = "Unique words",
+       title = "Most frequent words found in the tweets of the movie",
+       subtitle = "Stop words removed from the list")
+```
+
+#### Show the most frequently used hashtags
+```{r}
+movie_tweets_original$hashtags <- as.character(movie_tweets_original$hashtags)
+movie_tweets_original$hashtags <- gsub("c\\(", "", movie_tweets_original$hashtags)
+set.seed(1234)
+wordcloud(movie_tweets_original$hashtags, min.freq=50, scale=c(2, 1), random.order=FALSE, rot.per=0.35, colors=brewer.pal(8, "Dark2"))
+
+```
+
+#### Show the accounts from which most retweets originate
+```{r}
+set.seed(1234)
+wordcloud(post_tweets_data$retweet_screen_name, min.freq=200, scale=c(2, .5), random.order=FALSE, rot.per=0.25, 
+          colors=brewer.pal(8, "Dark2"))
+
+```
+
+#### Shows the location from where most of the tweets belongs
+```{r}
+#set.seed(1234)
+
+wordcloud(post_tweets_data$location, min.freq=200, scale=c(3, 1), random.order=FALSE, rot.per=0.25, 
+          colors=brewer.pal(8, "Dark2"))
+
+```
+
+#### Shows the location from where most of the retweets belongs
+```{r}
+set.seed(1234)
+
+wordcloud(post_tweets_data$retweet_location, min.freq=200, scale=c(2, 0.5), random.order=FALSE, rot.per=0.25, 
+          colors=brewer.pal(8, "Dark2"))
+
+```
+
+#### PERFORM A SENTIMENT ANALYSIS OF THE TWEETS FOR POST RELEASE USING "syuzhet" PACKAGE
+```{r}
+# Converting tweets to ASCII to trackle strange characters
+tweets <- iconv(tweets, from="UTF-8", to="ASCII", sub="")
+
+ew_sentiment <- get_nrc_sentiment((tweets))
+sentimentscores<-data.frame(colSums(ew_sentiment[,]))
+names(sentimentscores) <- "Score"
+sentimentscores <- cbind("sentiment"=rownames(sentimentscores),sentimentscores)
+rownames(sentimentscores) <- NULL
+ggplot(data=sentimentscores,aes(x=sentiment,y=Score))+
+  geom_bar(aes(fill=sentiment),stat = "identity")+
+  theme(legend.position="none")+
+  xlab("Sentiments")+ylab("Scores")+
+  ggtitle("Overall sentiment based on scores using syuzhet - Post Release")+
+  theme_minimal()
+
+```
+
+
+
+#### Create subset of tweets text
+```{r}
+
+set.seed(777) # Make process reproducible
+sub_blogs = post_tweets_data$text[sample(length(post_tweets_data$text),length(post_tweets_data$text)*0.1)] # make subset
+
+```
+
+#### Creating a corpus and cleaning data
+```{r}
+sub_blogs_Corpus <- VCorpus(VectorSource(sub_blogs)) # Make corpus
+sub_blogs_Corpus <- tm_map(sub_blogs_Corpus, stripWhitespace) # Remove unneccesary white spaces
+sub_blogs_Corpus <- tm_map(sub_blogs_Corpus, removePunctuation) # Remove punctuation
+sub_blogs_Corpus <- tm_map(sub_blogs_Corpus, removeNumbers) # Remove numbers
+sub_blogs_Corpus <- tm_map(sub_blogs_Corpus, tolower) # Convert to lowercase
+sub_blogs_Corpus <- tm_map(sub_blogs_Corpus, PlainTextDocument) # Plain text
+sub_blogs_Corpus <- tm_map(sub_blogs_Corpus, removeWords , c(stopwords("english"),"watch",
+                    "boycott","chhapaak","like","just","yes","know",
+                  "will"," ticket ","ticket","book","people"," book ",
+                  "friday","atleast","countri","program","dhamaal",
+                  "tanhaji","retweet","golmaal","boy","film","just","acid","bollywood",
+                  "instead","prefer","public","hungri","going","week","chameleon","show","now","let",
+                  "day","bms","cr","go","watch","r","like","if","imdb",
+                  "forget","rate","movie","theater,","set","accept","also","malusare","don"))
+
+# Remove english stop words
+
+```
+
+#### Tokenizing, calculating frequencies and making plots of n-grams
+```{r}
+n_grams_plot <- function(n, data) {
+  
+  options(mc.cores=1)
+  
+  # Builds n-gram tokenizer 
+  tk <- function(x) NGramTokenizer(x, Weka_control(min = n, max = n))
+  # Create matrix
+  ngrams_matrix <- TermDocumentMatrix(data, control=list(tokenize=tk))
+  # make matrix for easy view
+  ngrams_matrix <- as.matrix(rollup(ngrams_matrix, 2, na.rm=TRUE, FUN=sum))
+  ngrams_matrix <- data.frame(word=rownames(ngrams_matrix), freq=ngrams_matrix[,1])
+  # find 20 most frequent n-grams in the matrix
+  ngrams_matrix <- ngrams_matrix[order(-ngrams_matrix$freq), ][1:20, ]
+  ngrams_matrix$word <- factor(ngrams_matrix$word, as.character(ngrams_matrix$word))
+  
+  # plots
+  ggplot(ngrams_matrix, aes(x=word, y=freq)) + 
+    geom_bar(stat="Identity", fill="pink", colour="black") + 
+    theme(axis.text.x = element_text(angle = 90, hjust = 1)) + xlab("n-grams") + 
+    ylab("Frequency")
+}
+
+```
+
+#### Plot of frequency distribution of 1-gram
+```{r}
+n_grams_plot(n=1, data=sub_blogs_Corpus)
+```
+
+#### Plot of frequency distribution of 2-gram
+```{r}
+n_grams_plot(n=2, data=sub_blogs_Corpus)
+```
+
+#### Plot of frequency distribution of 3-gram
+```{r}
+n_grams_plot(n=3, data=sub_blogs_Corpus)
+```
+
+#### Plot of frequency distribution of 4-gram
+```{r}
+n_grams_plot(n=4, data=sub_blogs_Corpus)
+```
+
+#### Create the Corpus and DTM(Document Term Matrix)
+```{r}
+
+corpus_tw = Corpus(VectorSource(post_tweets_data$text))
+
+corpus_tw = tm_map(corpus_tw, tolower)
+
+corpus_tw = tm_map(corpus_tw, removePunctuation)
+
+corpus_tw = tm_map(corpus_tw, content_transformer(removeNumbers))
+
+#add stopwords
+#stopwords are words which do not contain much significance.
+#Identify the words in the tweets which can be filtered out because they return vast amount of unnecessary information.
+tw_stopwords <- c(stopwords("english"),"watch","boycott","chhapaak","like","just","yes","know",
+                  "will"," ticket ","ticket","book","people"," book ",
+                  "friday","atleast","countri","program","dhamaal",
+                  "tanhaji","retweet","golmaal","boy","film","just","acid","bollywood","instead","prefer",
+                  "public","hungri","going","week","chameleon","show","now","let","day","bms","cr",
+                  "go","watch","r","like","if","imdb","forget","rate","movie","theater,","set",
+                  "accept","also","malusare","don")
+
+#remove stopwords
+corpus_tw <- tm_map(corpus_tw,removeWords,tw_stopwords)
+
+dtm_tw = DocumentTermMatrix(corpus_tw)
+
+sparse_tw = removeSparseTerms(dtm_tw, 0.995)
+
+
+sparse_tw.df = as.data.frame(as.matrix(sparse_tw))
+
+colnames(sparse_tw.df) = make.names(colnames(sparse_tw.df))
+
+
+```
+
+#### Get the polarity score of each tweet using get_sentiment funcation (syuzhut package)
+```{r}
+
+score_value_post <- get_sentiment(post_tweets_data$text)
+
+
+boxplot(score_value_post,horizontal = TRUE)
+
+```
+
+#### Classify the tweets based on the scores provided by get_sentiment function into 5 categories.
+```{r}
+
+class_sentiment <- ifelse(score_value_post < 0, "Flop", ifelse(score_value_post == 0 , "Ignore",
+                              ifelse(score_value_post > 0 & score_value_post < 0.6, "Average",
+                                     ifelse(score_value_post >=0.6 & score_value_post < 1.25 ,"Hit",
+                                      ifelse(score_value_post >= 1.25 & score_value_post < 2.5
+                                             ,"Superhit","Blockbuster")))))
+                            
+sparse_tw.df$Polarity = class_sentiment
+  
+table(sparse_tw.df$Polarity)
+
+```
+
+
+#### Remove the data which has Ignore value in their Y column as it's score value is zero
+```{r}
+
+sparse_tw_new.df <- filter(sparse_tw.df, Polarity != "Ignore")
+
+table(sparse_tw_new.df$Polarity)
+
+```
+
+```{r}
+summary(score_value_post)
+```
+
+
+```{r}
+boxplot(score_value_post,horizontal = TRUE)
+```
+
+#### Plot the target class to see the frequency.
+```{r}
+df <- sparse_tw_new.df %>%
+  group_by(Polarity) %>%
+  summarise(counts = n())
+
+ggplot(df, aes(x = Polarity , y= counts , fill=Polarity)) +
+  geom_bar(stat = "identity",width=0.8) +
+  geom_text(aes(label = counts), vjust = -0.2) + 
+  theme_pubclean()
+```
+
+#### Plot the target class to see the proportion of the classes
+```{r}
+
+
+ggplot(sparse_tw_new.df, aes(x = as.factor(Polarity) , fill=Polarity)) +
+  geom_bar(aes(y = (..count..)/sum(..count..)),width=0.5) +
+  geom_text(aes(y = ((..count..)/sum(..count..)), label = scales::percent((..count..)/sum(..count..))), stat = "count", vjust = -0.25) +
+  scale_y_continuous(labels = percent) +
+  labs(title = "Movie Ratings Post Release", y = "Percent", x = "Ratings")
+```
+
+
+```{r}
+
+df <- sparse_tw_new.df %>%
+  group_by(Polarity) %>%
+  summarise(counts = n())
+
+ggplot(df, aes(x = reorder(Polarity,counts) , y= counts , fill=Polarity)) +
+  geom_bar(stat = "identity",width=0.5) +
+  geom_text(aes(label = counts), vjust = -0.2) + 
+  theme_pubclean()
+```
+
+
+
+### BUILD CLASSIFICATION MODELS AND PREDICT FOR POST RELEASE ANALYSIS 
+
+We will use different classification models and check its accuracy and performance.
+Polarity will be the dependant variable.
+
+```{r}
+prop.table(table(sparse_tw_new.df$Polarity))
+```
+
+#### Extract random 4000 observations from the DTM 
+```{r}
+#model_data <- sparse_tw_new.df %>% sample_frac(0.10)
+
+model_data <- sample_n(sparse_tw_new.df, 4000)
+dim(model_data)
+
+```
+
+#### Split the data into 70-30 ratio for Train and Test
+```{r}
+library(caTools)
+
+set.seed(777)
+
+model_data$Polarity <- as.factor(model_data$Polarity)
+
+spl = sample.split(model_data$Polarity, SplitRatio = 0.7)
+
+train_data = subset(model_data, spl == TRUE)
+test_data = subset(model_data, spl == FALSE)
+
+prop.table(table(train_data$Polarity))
+prop.table(table(test_data$Polarity))
+
+
+```
+
+#### Build CART Model
+```{r}
+# Load the Libraries
+library(rpart)
+library(rpart.plot)
+
+movie_cart_model = rpart(Polarity ~ ., data=train_data, method="class")
+
+#CART Diagram
+prp(movie_cart_model, extra=2)
+```
+
+
+#### Predict and Evaluate the Performance of CART train data
+```{r}
+predict_cart_train_post = predict(movie_cart_model, data=train_data, type="class")
+
+# Evaluate the performance - Confusion matrix :
+confusion_matrix_cart <- table(train_data$Polarity, predict_cart_train_post)
+confusion_matrix_cart
+
+# Baseline accuracy
+accuracy_cart_train_post = sum(diag(confusion_matrix_cart))/sum(confusion_matrix_cart)
+accuracy_cart_train_post
+```
+
+#### Predict and Evaluate the Performance of CART on test data
+```{r}
+predict_cart_test_post = predict(movie_cart_model, newdata=test_data, type="class")
+
+# Evaluate the performance - Confusion matrix :
+confusion_matrix_cart <- table(test_data$Polarity, predict_cart_test_post)
+confusion_matrix_cart
+
+# Baseline accuracy
+accuracy_cart_test_post = sum(diag(confusion_matrix_cart))/sum(confusion_matrix_cart)
+accuracy_cart_test_post
+```
+
+#### AUC-ROC Curve for CART on Train and Test dataset
+```{r}
+
+library(pROC)
+
+#Train data - Plot ROC curve
+roc_obj_cart_train_post <- multiclass.roc(as.numeric(train_data$Polarity),as.numeric(predict_cart_train_post),quiet = TRUE)
+roc_obj_cart_train_post
+
+#Test data - Plot ROC curve
+roc_obj_cart_test_post <- multiclass.roc(as.numeric(test_data$Polarity),as.numeric(predict_cart_test_post),quiet = TRUE)
+roc_obj_cart_test_post
+
+
+```
+
+#### Comparison of all the performace measure of CART Model on Train and Test dataset
+```{r}
+results_cart_train_post = data.frame(accuracy_cart_train_post, as.numeric(roc_obj_cart_train_post$auc))
+names(results_cart_train_post) = c("ACCURACY", "AUC-ROC" )
+
+results_cart_test_post = data.frame(accuracy_cart_test_post,as.numeric(roc_obj_cart_test_post$auc) )
+names(results_cart_test_post) = c("ACCURACY", "AUC-ROC")
+
+
+df_fin =rbind(results_cart_train_post, results_cart_test_post)
+row.names(df_fin) = c('CART Train Post', 'CART Test Post')
+df_fin
+```
+
+#### Build Variable Importance plot of the CART MODEL for Post Release dataset
+```{r}
+
+var_imp_cart_df <- as.data.frame(movie_cart_model$variable.importance)
+
+par(mar=c(7,4,3,2))
+plot(var_imp_cart_df$`movie_cart_model$variable.importance`, xlab="variable", 
+    ylab="Importance", xaxt = "n", pch=20)
+axis(1, at=1:length(var_imp_cart_df$`movie_cart_model$variable.importance`), labels=row.names(var_imp_cart_df),las=2)
+```
+
+
+#### Build Random Forest Model
+```{r}
+# Load Library
+library(randomForest)
+
+set.seed(777)
+
+movie_rf_model = randomForest(Polarity ~ ., data=train_data,importance=TRUE)
+movie_rf_model
+
+```
+
+#### Predict and Evaluate the Performance of Random Forest on train
+```{r}
+# Make predictions:
+predict_rf_train_post = predict(movie_rf_model, data=train_data,type="response")
+
+# Evaluate the performance - Confusion matrix : 
+confusion_matrix_rf <- table(train_data$Polarity, predict_rf_train_post)
+confusion_matrix_rf
+
+# Baseline accuracy:
+accuracy_rf_train_post = sum(diag(confusion_matrix_rf))/sum(confusion_matrix_rf)
+accuracy_rf_train_post
+
+```
+
+
+#### Predict and Evaluate the Performance of Random Forest on test data
+```{r}
+# Make predictions:
+predict_rf_test_post = predict(movie_rf_model, newdata=test_data,type="response")
+
+# Evaluate the performance - Confusion matrix : 
+confusion_matrix_rf <- table(test_data$Polarity, predict_rf_test_post)
+confusion_matrix_rf
+
+# Baseline accuracy:
+accuracy_rf_test_post = sum(diag(confusion_matrix_rf))/sum(confusion_matrix_rf)
+accuracy_rf_test_post
+
+```
+
+
+#### Variable Importance of Random Forest
+```{r}
+#Variable importance: 
+#varImpPlot(movie_rf_model,main='Variable Importance Plot: Movie ',type=2)
+varImpPlot(movie_rf_model,sort=TRUE,type=NULL, class=NULL, scale=TRUE,cex=.8)
+```
+
+#### AUC-ROC Curve for CART on Train and Test dataset
+```{r}
+
+#Train data - Plot ROC curve
+roc_obj_rf_train_post <- multiclass.roc(as.numeric(train_data$Polarity), as.numeric(predict_rf_train_post),quiet = TRUE)
+roc_obj_rf_train_post
+
+#Test data - Plot ROC curve
+roc_obj_rf_test_post <- multiclass.roc(as.numeric(test_data$Polarity), as.numeric(predict_cart_test_post),quiet = TRUE)
+roc_obj_rf_test_post
+
+
+```
+
+
+#### Comparison of all the performace measure of Random Forest Model on Train and Test dataset
+```{r}
+results_rf_train_post = data.frame(accuracy_rf_train_post, as.numeric(roc_obj_rf_train_post$auc))
+names(results_rf_train_post) = c("ACCURACY", "AUC-ROC" )
+
+results_rf_test_post = data.frame(accuracy_rf_test_post,as.numeric(roc_obj_rf_test_post$auc) )
+names(results_rf_test_post) = c("ACCURACY", "AUC-ROC")
+
+
+df_fin =rbind(results_rf_train_post, results_rf_test_post)
+row.names(df_fin) = c('Random Forest Train Post', 'Random Forest Test Post')
+df_fin
+```
+
+
+
+#### Build SVM Model (Support Vector Machines)
+
+```{r}
+
+movie_svm_model  <- train(Polarity ~ . , data = train_data, method='svmLinear' , trControl = trainControl("cv", number = 10), preProcess = c("center","scale")) 
+
+```
+
+#### Plot Variable Importance of SVM model
+```{r}
+
+plot(varImp(object=movie_svm_model),   main="SVM - Variable Importance", top = 15)
+
+```
+
+#### Predict and Evaluate the performance of SVM Model on train data
+```{r}
+# Make predictions:
+predict_svm_train_post = predict(movie_svm_model, data=train_data, decision.values=TRUE)
+
+# Evaluate the performance - Confusion matrix :
+confusion_matrix_svm <- table(train_data$Polarity, predict_svm_train_post)
+confusion_matrix_svm
+
+# Baseline accuracy:
+accuracy_svm_train_post = sum(diag(confusion_matrix_svm))/sum(confusion_matrix_svm)
+accuracy_svm_train_post
+
+```
+
+#### Predict and Evaluate the performance of SVM Model on test data
+```{r}
+# Make predictions:
+predict_svm_test_post = predict(movie_svm_model, newdata=test_data,decision.values=TRUE)
+
+# Evaluate the performance - Confusion matrix :
+confusion_matrix_svm <- table(test_data$Polarity, predict_svm_test_post)
+confusion_matrix_svm
+
+# Baseline accuracy:
+accuracy_svm_test_post = sum(diag(confusion_matrix_svm))/sum(confusion_matrix_svm)
+accuracy_svm_test_post
+
+```
+
+
+#### AUC-ROC Curve for SVM model on Train and Test dataset
+```{r}
+
+library(pROC)
+
+#Train data - Plot ROC curve
+roc_obj_svm_train_post <- multiclass.roc(as.numeric(train_data$Polarity),as.numeric(predict_svm_train_post),quiet=TRUE)
+roc_obj_svm_train_post
+
+#Test data - Plot ROC curve
+roc_obj_svm_test_post <- multiclass.roc(as.numeric(test_data$Polarity),as.numeric(predict_svm_test_post),quiet=TRUE)
+roc_obj_svm_test_post
+
+
+```
+
+#### Comparison of all the performace measure of SVM Model on Train and Test dataset
+```{r}
+results_svm_train_post = data.frame(accuracy_svm_train_post, as.numeric(roc_obj_svm_train_post$auc))
+names(results_svm_train_post) = c("ACCURACY", "AUC-ROC" )
+
+results_svm_test_post = data.frame(accuracy_svm_test_post,as.numeric(roc_obj_svm_test_post$auc) )
+names(results_svm_test_post) = c("ACCURACY", "AUC-ROC")
+
+
+df_fin =rbind(results_svm_train_post, results_svm_test_post)
+row.names(df_fin) = c('SVM Train Post', 'SVM Test Post')
+df_fin
+```
+
+
+#### Build Naive Bayes Model
+
+```{r}
+
+
+var_predictor_train <- as.matrix(train_data[,-which(names(train_data)=="Polarity")])
+var_dependent  <- as.factor(train_data$Polarity)
+
+
+
+movie_nb_model <- multinomial_naive_bayes(x = var_predictor_train, y = var_dependent, laplace = 1)
+summary(movie_nb_model)
+
+```
+
+
+#### Predict and Evaluate the performance of NB Model on train data
+```{r}
+# Make predictions:
+predict_nb_train_post = predict(movie_nb_model, var_predictor_train, type = "class")
+
+# Evaluate the performance - Confusion matrix :
+confusion_matrix_nb <- table(train_data$Polarity, predict_nb_train_post)
+confusion_matrix_nb
+
+# Baseline accuracy:
+accuracy_nb_train_post = sum(diag(confusion_matrix_nb))/sum(confusion_matrix_nb)
+accuracy_nb_train_post
+
+```
+
+
+#### Predict and Evaluate the performance of NB Model on test data
+```{r}
+
+var_predictor_test <- as.matrix(test_data[,-which(names(test_data)=="Polarity")])
+
+
+# Make predictions:
+predict_nb_test_post = predict(movie_nb_model,newdata = var_predictor_test, type = "class")
+
+# Evaluate the performance - Confusion matrix :
+confusion_matrix_nb <- table(test_data$Polarity, predict_nb_test_post)
+confusion_matrix_nb
+
+# Baseline accuracy:
+accuracy_nb_test_post = sum(diag(confusion_matrix_nb))/sum(confusion_matrix_nb)
+accuracy_nb_test_post
+
+```
+
+
+#### AUC-ROC Curve for Naive Bayes model on Train and Test dataset
+```{r}
+
+library(pROC)
+#library(ROCR)
+#Train data - Plot ROC curve
+roc_obj_nb_train_post <- multiclass.roc(as.numeric(train_data$Polarity),as.numeric(predict_nb_train_post),quiet=TRUE)
+roc_obj_nb_train_post
+
+
+#Test data - Plot ROC curve
+roc_obj_nb_test_post <- multiclass.roc(as.numeric(test_data$Polarity),as.numeric(predict_nb_test_post),quiet=TRUE)
+roc_obj_nb_test_post
+
+
+```
+
+
+#### Comparison of all the performace measure of Naive Bayes Model  on Train and Test dataset
+```{r}
+results_nb_train_post = data.frame(accuracy_nb_train_post, as.numeric(roc_obj_nb_train_post$auc))
+names(results_nb_train_post) = c("ACCURACY", "AUC-ROC" )
+
+results_nb_test_post = data.frame(accuracy_nb_test_post,as.numeric(roc_obj_nb_test_post$auc) )
+names(results_nb_test_post) = c("ACCURACY", "AUC-ROC")
+
+
+df_fin =rbind(results_nb_train_post, results_nb_test_post)
+row.names(df_fin) = c('Naive Bayes Train Post', 'Naive Bayes Test Post')
+df_fin
+```
+
+
+### Comparing all the models with their performance - Accuracy and AUC-ROC Value for Post Pelease
+```{r}
+
+df_fin =rbind(results_cart_train_post, results_cart_test_post, results_rf_train_post, results_rf_test_post, results_svm_train_post,results_svm_test_post,results_nb_train_post,results_nb_test_post)
+
+row.names(df_fin) = c('CART Train Post', 'CART Test Post','Random Forest Train Post','Random Forest Test Post', 'SVM Train Post','SVM Test Post','Naive Bayes Train Post','Naive Bayes Test Post')
+
+#install.packages("kableExtra")
+library(kableExtra)
+
+kable(round(df_fin,2)) %>%
+    kable_styling(c("striped","bordered")) %>%
+    add_header_above(c(" ","Model Performance Comparison Metrics for Post Release" = 2))
+```
+
+
+
+### WORD CLOUD OF THE TWEETED WORDS POST RELEASE CATEGORY WISE
+```{r}
+
+svm_test_data_post <- cbind.data.frame(test_data, predicted=predict_svm_test_post, stringsAsFactors = FALSE )
+
+```
+
+```{r}
+
+Flopset_post <- subset.data.frame(svm_test_data_post,svm_test_data_post$predicted == "Flop")
+Averageset_post <- subset.data.frame(svm_test_data_post,svm_test_data_post$predicted == "Average")
+Hitset_post <- subset.data.frame(svm_test_data_post,svm_test_data_post$predicted == "Hit")
+Superhitset_post <- subset.data.frame(svm_test_data_post,svm_test_data_post$predicted == "Superhit")
+Blockbusterset_post <- subset.data.frame(svm_test_data_post,svm_test_data_post$predicted == "Blockbuster")
+
+```
+
+```{r}
+
+Flop.word.freq <- sort(colSums(as.matrix(select(Flopset_post,-c(Polarity,predicted)))), decreasing= TRUE)
+
+Average.word.freq <- sort(colSums(as.matrix(select(Averageset_post,-c(Polarity,predicted)))), decreasing= TRUE)
+
+Hit.word.freq <- sort(colSums(as.matrix(select(Hitset_post,-c(Polarity,predicted)))), decreasing= TRUE)
+
+Superhit.word.freq <- sort(colSums(as.matrix(select(Superhitset_post,-c(Polarity,predicted))))
+                                   , decreasing= TRUE)
+
+Blockbuster.word.freq <- sort(colSums(as.matrix(select(Blockbusterset_post,-c(Polarity,predicted)))), decreasing= TRUE)
+
+```
+
+```{r}
+
+Flop.word.freq_df<- as.data.frame(Flop.word.freq)
+
+Average.word.freq_df<- as.data.frame(Average.word.freq)
+
+Hit.word.freq_df<- as.data.frame(Hit.word.freq)
+
+Superhit.word.freq_df<- as.data.frame(Superhit.word.freq)
+
+Blockbuster.word.freq_df<- as.data.frame(Blockbuster.word.freq)
+
+
+Flop.word.freq_df_valid <- subset.data.frame(Flop.word.freq_df,Flop.word.freq > 0 )
+         
+Average.word.freq_df_valid <- subset.data.frame(Average.word.freq_df,Average.word.freq > 0)                     
+Hit.word.freq_df_valid <- subset.data.frame(Hit.word.freq_df,Hit.word.freq > 0)
+
+Superhit.word.freq_df_valid <- subset.data.frame(Superhit.word.freq_df,Superhit.word.freq > 0)
+
+Blockbuster.word.freq_df_valid <- subset.data.frame(Blockbuster.word.freq_df,Blockbuster.word.freq > 0)
+
+
+```
+
+```{r}
+
+Flopset_post_df <- as.data.frame(rownames(Flop.word.freq_df_valid))
+Averageset_post_df <- as.data.frame(rownames(Average.word.freq_df_valid))
+Hitset_post_df <- as.data.frame(rownames(Hit.word.freq_df_valid))
+Superhitset_post_df <- as.data.frame(rownames(Superhit.word.freq_df_valid))
+Blockbusterset_post_df <- as.data.frame(rownames(Blockbuster.word.freq_df_valid))
+
+names(Flopset_post_df)[1] <- "Flop_words"
+names(Averageset_post_df)[1] <- "Average_words"
+names(Hitset_post_df)[1] <- "Hit_words"
+names(Superhitset_post_df)[1] <- "Superhit_words"
+names(Blockbusterset_post_df)[1] <- "Blockbuster_words"
+
+```
+
+```{r}
+Flopset_post_df$Flop_words <- as.character(Flopset_post_df$Flop_words)
+Averageset_post_df$Average_words <- as.character(Averageset_post_df$Average_words)
+Hitset_post_df$Hit_words <- as.character(Hitset_post_df$Hit_words)
+Superhitset_post_df$Superhit_words <- as.character(Superhitset_post_df$Superhit_words)
+Blockbusterset_post_df$Blockbuster_words <- as.character(Blockbusterset_post_df$Blockbuster_words)
+
+```
+
+```{r}
+
+Flopset_post_score <- get_sentiment(Flopset_post_df$Flop_words)
+Averageset_post_score <- get_sentiment(Averageset_post_df$Average_words)
+Hitset_post_score <- get_sentiment(Hitset_post_df$Hit_words)
+Superhitset_post_score <- get_sentiment(Superhitset_post_df$Superhit_words)
+Blockbusterset_post_score <- get_sentiment(Blockbusterset_post_df$Blockbuster_words)
+
+```
+
+```{r}
+
+Flopset_post_df_score <- cbind.data.frame(Flopset_post_df,score=Flopset_post_score)
+Averageset_post_df_score <- cbind.data.frame(Averageset_post_df,score=Averageset_post_score)
+Hitset_post_df_score <- cbind.data.frame(Hitset_post_df,score=Hitset_post_score)
+Superhitset_post_df_score <- cbind.data.frame(Superhitset_post_df,score=Superhitset_post_score)
+Blockbusterset_post_df_score <- cbind.data.frame(Blockbusterset_post_df,score=Blockbusterset_post_score)
+
+```
+
+
+```{r}
+
+Flopset_post_score_new <- subset.data.frame(Flopset_post_df_score,score < 0.00)
+Averageset_post_score_new <- subset.data.frame(Averageset_post_df_score,score != 0.00)
+Hitset_post_score_new <- subset.data.frame(Hitset_post_df_score,score > 0.00)
+Superhitset_post_score_new <- subset.data.frame(Superhitset_post_df_score,score > 0.00)
+Blockbusterset_post_score_new <- subset.data.frame(Blockbusterset_post_df_score,score > 0.00)
+
+
+Flopset_post_score_new$score <- abs(Flopset_post_score_new$score*100)
+Averageset_post_score_new$score <- abs(Averageset_post_score_new$score*100)
+Hitset_post_score_new$score <- Hitset_post_score_new$score*100
+Superhitset_post_score_new$score <- Superhitset_post_score_new$score*100
+Blockbusterset_post_score_new$score <- Blockbusterset_post_score_new$score*100
+
+```
+
+
+#### Flop category word cloud post release
+```{r}
+
+pal<- brewer.pal(8, "Dark2")
+
+wordcloud(words = Flopset_post_score_new$Flop_words, freq = Flopset_post_score_new$score, min.freq = 25, random.order = F, scale=c(2, .5) , colors = pal, max.words = 1000)
+
+```
+
+#### Average category word cloud post release
+```{r}
+pal<- brewer.pal(8, "Dark2")
+wordcloud(words = Averageset_post_score_new$Average_words, freq = Averageset_post_score_new$score, min.freq = 25, scale=c(2, .5) , random.order = F, colors = pal, max.words = 1000)
+
+```
+
+#### Hit category word cloud post release
+```{r}
+
+pal<- brewer.pal(8, "Dark2")
+
+wordcloud(words = Hitset_post_score_new$Hit_words, freq = Hitset_post_score_new$score, min.freq = 25, random.order = F, scale=c(2, .5),colors = pal, max.words = 1000)
+
+
+```
+
+#### Superhit category word cloud post release
+```{r}
+
+pal<- brewer.pal(8, "Dark2")
+
+wordcloud(words = Superhitset_post_score_new$Superhit_words, freq = Superhitset_post_score_new$score, min.freq = 15,scale=c(2, 0.25), random.order = F, colors = pal, max.words = 1000)
+
+```
+
+#### Blockbuster category word cloud post release
+```{r}
+
+pal<- brewer.pal(8, "Dark2")
+wordcloud(words = Blockbusterset_post_score_new$Blockbuster_words, freq = Blockbusterset_post_score_new$score, min.freq = 35, random.order = F, scale=c(2, 0.25),colors = pal, max.words = 1000)
+
+```
+
+
+
+# "RATING COMPARISON OF THE MOVIE FOR PRE AND POST RELEASE ON TEST DATASET"
+
+## MOVIE RATING BASED ON THE BEST PERFORMING MODEL SVM FOR PRE RELEASE ON TEST DATA
+```{r}
+
+ggplot(as.data.frame(predict_svm_test_pre), aes(x = as.factor(predict_svm_test_pre) , fill=predict_svm_test_pre)) +
+  geom_bar(aes(y = (..count..)/sum(..count..))) +
+  geom_text(aes(y = ((..count..)/sum(..count..)), label = scales::percent((..count..)/sum(..count..))), stat = "count", vjust = -0.25) +
+  scale_y_continuous(labels = percent) +
+  labs(title = "Movie Ratings Pre Release", y = "Percent", x = "Ratings")
+
+```
+
+
+
+#### Save the polarity score value given by get_sentiment function (syuzhet) of each target class into a vector
+```{r}
+
+score_value_pre_df <- as.data.frame(score_value_pre)
+
+
+Flop_pre <- round(score_value_pre_df %>% filter(score_value_pre_df < 0 ),2)
+Average_pre <- round(score_value_pre_df %>% filter(score_value_pre_df > 0 & score_value_pre_df < 0.6),2)
+Hit_pre <- round(score_value_pre_df %>% filter(score_value_pre_df >=0.6 & score_value_pre_df < 1.25),2)
+Superhit_pre <- round(score_value_pre_df %>% filter(score_value_pre_df >= 1.25 & score_value_pre_df < 2.5),2)
+Blockbuster_pre <- round(score_value_pre_df %>% filter(score_value_pre_df >= 2.5),2)
+
+
+```
+
+#### Find the top 2 highest target class based on their frequency
+```{r}
+
+#predict_rf_test_pre_df <- as.data.frame(predict_rf_test_pre)
+
+predict_svm_test_pre_df <- as.data.frame(table(predict_svm_test_pre))
+
+
+print(paste("List of Rating and their Frequency from top to bottom"))
+predict_svm_test_pre_df[with(predict_svm_test_pre_df, order(Freq, decreasing = T)),]
+
+
+for ( i in 1:nrow(predict_svm_test_pre_df))
+  
+{
+  cnt <- predict_svm_test_pre_df[i,"Freq"]
+  rating <- predict_svm_test_pre_df[i,"predict_svm_test_pre"]
+  num <- sort(predict_svm_test_pre_df$Freq, decreasing = F)
+  
+
+  if (cnt == (tail(num,1)))
+      {
+        highest_class = rating
+        print(paste( "Highest Rating Class is - ", highest_class))
+        
+        
+  }
+  
+  else{
+    
+    if (cnt == (head(tail(num, 2),1)))
+    {
+      
+      sec_highest_class = rating
+      print(paste( "Second Highest Rating Class is - ", sec_highest_class))
+    }
+    
+  }
+
+}
+
+
+```
+
+#### Check the condition based on the top 2 target class and find the average polarity score of them from the pre dataset
+```{r}
+if (highest_class == "Flop" && sec_highest_class == "Average" | highest_class == "Average" && sec_highest_class == "Flop" )
+{
+
+average_rating_pre <- sum(Flop_pre$score_value_pre,
+                          Average_pre$score_value_pre)/sum(length(Flop_pre$score_value_pre),
+                                                          length(Average_pre$score_value_pre))
+print(average_rating_pre)
+
+}else{
+  
+      if (highest_class == "Flop" && sec_highest_class == "Hit" | highest_class == "Hit" && sec_highest_class == "Flop")
+{
+
+average_rating_pre <- sum(Flop_pre$score_value_pre,
+                          Hit_pre$score_value_pre)/sum(length(Flop_pre$score_value_pre),
+                                                          length(Hit_pre$score_value_pre))
+
+print(average_rating_pre)
+
+  }
+
+else{
+  
+  if (highest_class == "Flop" && sec_highest_class == "Superhit"  | highest_class == "Superhit" && sec_highest_class == "Flop")
+{
+
+average_rating_pre <- sum(Flop_pre$score_value_pre,
+                          Superhit_pre$score_value_pre)/sum(length(Flop_pre$score_value_pre),
+                                                          length(Superhit_pre$score_value_pre))
+
+print(average_rating_pre)
+
+  }
+else{
+  
+  if (highest_class == "Flop" && sec_highest_class == "Blockbuster" | highest_class == "Blockbuster" && sec_highest_class == "Flop")
+{
+
+average_rating_pre <- sum(Flop_pre$score_value_pre,
+                          Blockbuster_pre$score_value_pre)/sum(length(Flop_pre$score_value_pre),
+                                                          length(Blockbuster_pre$score_value_pre))
+
+print(average_rating_pre)
+
+  }
+else{
+  if (highest_class == "Average" && sec_highest_class == "Hit" | highest_class == "Hit" && sec_highest_class == "Average")
+{
+
+average_rating_pre <- sum(Average_pre$score_value_pre,
+                          Hit_pre$score_value_pre)/sum(length(Average_pre$score_value_pre),
+                                                          length(Hit_pre$score_value_pre))
+
+print(average_rating_pre)
+
+  }
+
+else{
+  if (highest_class == "Average" && sec_highest_class == "Superhit" | highest_class == "Superhit" && sec_highest_class == "Average")
+{
+
+average_rating_pre <- sum(Average_pre$score_value_pre,
+                          Superhit_pre$score_value_pre)/sum(length(Average_pre$score_value_pre),
+                                                          length(Superhit_pre$score_value_pre))
+
+print(average_rating_pre)
+
+  }
+
+else{
+  if (highest_class == "Average" && sec_highest_class == "Blockbuster" | highest_class == "Blockbuster" && sec_highest_class == "Average")
+{
+
+average_rating_pre <- sum(Average_pre$score_value_pre,
+                          Blockbuster_pre$score_value_pre)/sum(length(Average_pre$score_value_pre),
+                                                          length(Blockbuster_pre$score_value_pre))
+
+print(average_rating_pre)
+
+  }
+else{
+  if (highest_class == "Hit" && sec_highest_class == "Superhit" | highest_class == "Superhit" && sec_highest_class == "Hit")
+{
+
+average_rating_pre <- sum(Hit_pre$score_value_pre,
+                          Superhit_pre$score_value_pre)/sum(length(Hit_pre$score_value_pre),
+                                                          length(Superhit_pre$score_value_pre))
+
+print(average_rating_pre)
+
+}
+else{
+  if (highest_class == "Hit" && sec_highest_class == "Blockbuster" | highest_class == "Blockbuster" && sec_highest_class == "Hit")
+{  
+
+average_rating_pre <- sum(Hit_pre$score_value_pre,
+                          Blockbuster_pre$score_value_pre)/sum(length(Hit_pre$score_value_pre),
+                                                          length(Blockbuster_pre$score_value_pre))
+
+print(average_rating_pre)
+
+}
+else{
+  if (highest_class == "Superhit" && sec_highest_class == "Blockbuster" | highest_class == "Blockbuster" && sec_highest_class == "Superhit")
+{
+
+average_rating_pre <- sum(Superhit_pre$score_value_pre,
+                          Blockbuster_pre$score_value_pre)/sum(length(Superhit_pre$score_value_pre),
+                                                          length(Blockbuster_pre$score_value_pre))
+
+print(average_rating_pre)
+
+  }
+}}}}}}}}}
+
+```
+
+
+## Final Rating of the Movie Pre Release
+```{r}
+
+
+if (average_rating_pre < 0 )
+  {
+  
+  cat('Pre Release Rating of the Movie : "',movie_name,'" is *****  FLOP  *****')
+}else {
+   if ( average_rating_pre > 0 && average_rating_pre < 0.6)
+  {
+    cat('Pre Release Rating of the Movie : "',movie_name,'" is *****  AVERAGE  *****')
+  }
+  else {
+    if ( average_rating_pre >= 0.6 && average_rating_pre < 1.25)
+    {
+      
+      cat('Pre Release Rating of the Movie : "',movie_name,'" is *****  HIT  *****')
+    }
+    else{
+      if ( average_rating_pre >= 1.25 && average_rating_pre < 2.5)
+    {
+      
+      cat('Pre Release Rating of the Movie : "',movie_name,'" is *****  SUPERHIT  *****')
+      }
+      else{
+         if ( average_rating_pre >= 2.5)
+    {
+      
+      cat('Pre Release Rating of the Movie : "',movie_name,'" is *****  BLOCKBUSTER  *****')
+      
+      }
+      }
+    }
+  }
+}
+  
+  
+```
+
+
+## MOVIE RATING BASED ON THE BEST PERFORMING MODEL SVM FOR POST RELEASE ON TEST DATA
+```{r}
+#library(ggplot2)
+library(scales)
+ggplot(as.data.frame(predict_svm_test_post), aes(x = as.factor(predict_svm_test_post) , fill=predict_svm_test_post)) +
+  geom_bar(aes(y = (..count..)/sum(..count..))) +
+  geom_text(aes(y = ((..count..)/sum(..count..)), label = scales::percent((..count..)/sum(..count..))), stat = "count", vjust = -0.25) +
+  scale_y_continuous(labels = percent) +
+  labs(title = "Movie Ratings Post Release", y = "Percent", x = "Ratings")
+
+```
+
+#### Save the polarity score value of each target class into a vector
+```{r}
+
+score_value_post_df <- as.data.frame(score_value_post)
+
+
+Flop_post <- round(score_value_post_df %>% filter(score_value_post_df < 0 ),2)
+Average_post <- round(score_value_post_df %>% filter(score_value_post_df > 0 & score_value_post_df < 0.6),2)
+Hit_post <- round(score_value_post_df %>% filter(score_value_post_df >=0.6 & score_value_post_df < 1.25),2)
+Superhit_post <- round(score_value_post_df %>% filter(score_value_post_df >= 1.25 & score_value_post_df < 2.5),2)
+Blockbuster_post <- round(score_value_post_df %>% filter(score_value_post_df >= 2.5),2)
+
+
+```
+
+#### Find the top 2 highest target class based on their frequency
+```{r}
+
+#predict_rf_test_post_df <- as.data.frame(predict_rf_test_post)
+
+predict_svm_test_post_df <- as.data.frame(table(predict_svm_test_post))
+
+
+print(paste("List of Rating and their Frequency from top to bottom"))
+predict_svm_test_post_df[with(predict_svm_test_post_df, order(Freq, decreasing = T)),]
+
+for ( i in 1:nrow(predict_svm_test_post_df))
+  
+{
+  co <- predict_svm_test_post_df[i,"Freq"]
+  cate <- predict_svm_test_post_df[i,"predict_svm_test_post"]
+  num <- sort(predict_svm_test_post_df$Freq, decreasing = F)
+  
+  if (co ==(tail(num,1)))
+      {
+        highest_class <- cate
+        print(paste( "Highest Rating Class is - ", highest_class))
+        
+        
+  }
+  
+  else{
+    
+    if (co == (head(tail(num, 2),1)))
+    {
+      
+      sec_highest_class <- cate
+      print(paste( "Second Highest Rating Class is - ", sec_highest_class))
+    }
+  }
+
+}
+
+
+```
+
+
+
+#### Check the condition based on the top 2 target class and find the average polarity score of them
+```{r}
+if (highest_class == "Flop" && sec_highest_class == "Average" | highest_class == "Average" && sec_highest_class == "Flop" )
+{
+
+average_rating_post <- sum(Flop_post$score_value_post,
+                          Average_post$score_value_post)/sum(length(Flop_post$score_value_post),
+                                                          length(Average_post$score_value_post))
+
+print(average_rating_post)
+
+}else{
+  
+      if (highest_class == "Flop" && sec_highest_class == "Hit" | highest_class == "Hit" && sec_highest_class == "Flop")
+{
+
+average_rating_post <- sum(Flop_post$score_value_post,
+                          Hit_post$score_value_post)/sum(length(Flop_post$score_value_post),
+                                                          length(Hit_post$score_value_post))
+
+print(average_rating_post)
+
+  }
+
+else{
+  
+  if (highest_class == "Flop" && sec_highest_class == "Superhit"  | highest_class == "Superhit" && sec_highest_class == "Flop")
+{
+
+average_rating_post <- sum(Flop_post$score_value_post,
+                          Superhit_post$score_value_post)/sum(length(Flop_post$score_value_post),
+                                                          length(Superhit_post$score_value_post))
+
+print(average_rating_post)
+
+  }
+else{
+  
+  if (highest_class == "Flop" && sec_highest_class == "Blockbuster" | highest_class == "Blockbuster" && sec_highest_class == "Flop")
+{
+
+average_rating_post <- sum(Flop_post$score_value_post,
+                          Blockbuster_post$score_value_post)/sum(length(Flop_post$score_value_post),
+                                                          length(Blockbuster_post$score_value_post))
+
+print(average_rating_post)
+
+  }
+else{
+  if (highest_class == "Average" && sec_highest_class == "Hit" | highest_class == "Hit" && sec_highest_class == "Average")
+{
+
+average_rating_post <- sum(Average_post$score_value_post,
+                          Hit_post$score_value_post)/sum(length(Average_post$score_value_post),
+                                                          length(Hit_post$score_value_post))
+
+print(average_rating_post)
+
+  }
+
+else{
+  if (highest_class == "Average" && sec_highest_class == "Superhit" | highest_class == "Superhit" && sec_highest_class == "Average")
+{
+
+average_rating_post <- sum(Average_post$score_value_post,
+                          Superhit_post$score_value_post)/sum(length(Average_post$score_value_post),
+                                                          length(Superhit_post$score_value_post))
+
+print(average_rating_post)
+
+  }
+
+else{
+  if (highest_class == "Average" && sec_highest_class == "Blockbuster" | highest_class == "Blockbuster" && sec_highest_class == "Average")
+{
+
+average_rating_post <- sum(Average_post$score_value_post,
+                          Blockbuster_post$score_value_post)/sum(length(Average_post$score_value_post),
+                                                          length(Blockbuster_post$score_value_post))
+
+print(average_rating_post)
+
+  }
+else{
+  if (highest_class == "Hit" && sec_highest_class == "Superhit" | highest_class == "Superhit" && sec_highest_class == "Hit")
+{
+
+average_rating_post <- sum(Hit_post$score_value_post,
+                          Superhit_post$score_value_post)/sum(length(Hit_post$score_value_post),
+                                                          length(Superhit_post$score_value_post))
+
+print(average_rating_post)
+
+}
+else{
+  if (highest_class == "Hit" && sec_highest_class == "Blockbuster" | highest_class == "Blockbuster" && sec_highest_class == "Hit")
+{  
+
+average_rating_post <- sum(Hit_post$score_value_post,
+                          Blockbuster_post$score_value_post)/sum(length(Hit_post$score_value_post),
+                                                          length(Blockbuster_post$score_value_post))
+
+print(average_rating_post)
+
+}
+else{
+  if (highest_class == "Superhit" && sec_highest_class == "Blockbuster" | highest_class == "Blockbuster" && sec_highest_class == "Superhit")
+{
+
+average_rating_post <- sum(Superhit_post$score_value_post,
+                          Blockbuster_post$score_value_post)/sum(length(Superhit_post$score_value_post),
+                                                          length(Blockbuster_post$score_value_post))
+
+print(average_rating_post)
+
+  }
+}}}}}}}}}
+
+```
+
+## Final Rating of the Movie Post Release
+```{r}
+
+
+if (average_rating_post < 0 )
+{
+  
+  cat('Post Release Rating of the Movie : "',movie_name,'" is *****  FLOP  *****')
+}else {
+   if ( average_rating_post > 0 && average_rating_post < 0.6)
+  {
+    cat('Post Release Rating of the Movie : "',movie_name,'" is *****  AVERAGE  *****')
+  }
+  else {
+    if ( average_rating_post >= 0.6 && average_rating_post < 1.25)
+    {
+      
+      cat('Post Release Rating of the Movie : "',movie_name,'" is *****  HIT  *****')
+    }
+    else{
+      if ( average_rating_post >= 1.25 && average_rating_post < 2.5)
+    {
+      
+      cat('Post Release Rating of the Movie : "',movie_name,'" is *****  SUPERHIT  *****')
+      }
+      else{
+         if ( average_rating_post >= 2.5)
+    {
+      cat('Post Release Rating of the Movie : "',movie_name,'" is *****  BLOCKBUSTER  *****')
+      
+      }
+      }
+    }
+  }
+}
+  
+  
+```
+
+
+
+
+
+
+

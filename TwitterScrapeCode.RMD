@@ -1,0 +1,89 @@
+---
+title: "R Notebook"
+output:
+  word_document: default
+  html_notebook: default
+---
+
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+#install.packages("twitteR")
+#install.packages("RCurl")
+#install.packages("httr")
+#install.packages("syuzhet")
+#install.packages("rtweet")
+#install.packages("forestmangr")
+#install.packages("tidytext")
+#install.packages("slam")
+library(twitteR)
+library(rtweet)
+library(RCurl)
+library(httr)
+library(tm)
+
+```
+
+
+```{r}
+#setwd("F:/Saurav/Study/GL-Class/Capstone/Sentiment Analysis/twitter_data/project_data")
+
+consumer_key = "ocPFL55Ofksi4cpKX6nNH6PjW"
+consumer_secret = "TNeZzMLSbhYnFQWrImcJC6sWhPuX9rtQmA0R9FnjsK2dfDENh3"
+access_token = "1176408233864351745-wUD8M8LD2SyR0b8wy1MgzewvdxjBMy"
+access_secret ="IKPXzVpkvIq9X49siwAyKpbaesBA3AGL0tnvRvSKMqHX6"
+application_name = "capstone_pro_senti"
+
+twitter_token <- create_token(app = application_name,consumer_key = consumer_key,consumer_secret = consumer_secret,access_token = access_token,  access_secret = access_secret)
+
+```
+
+```{r}
+
+#searchString <- "#LoveAajKal OR #loveaajkal"
+#searchString <- "#Shikara"
+
+searchString <- "#Sooryavanshi"
+
+#searchString <- "#Baaghi3"
+
+numberOfTweets <- 100000
+
+tweets_data = search_tweets(searchString, n = numberOfTweets, lang = "en", retryonratelimit = TRUE)
+
+```
+
+
+```{r}
+
+#dabangg3.df <- twListToDF(tweets.df)
+
+tweets.df <- as.data.frame(tweets_data)
+
+```
+
+```{r}
+
+head(tweets.df)
+
+tail(tweets.df)
+
+```
+
+
+```{r}
+
+twitter.movie.df <- data.frame(lapply(tweets.df, as.character), stringsAsFactors=FALSE)
+
+```
+
+```{r}
+
+#write.csv(twitter.movie.df,"F:/Saurav/Study/GL-Class/Capstone/Sentiment Analysis/twitter_data/project_data/Baaghi3_set1.csv")
+
+write.csv(twitter.movie.df,"F:/Saurav/Study/GL-Class/Capstone/Sentiment Analysis/twitter_data/project_data/Sooryavanshi/Sooryavanshi_set3.csv")
+
+```
