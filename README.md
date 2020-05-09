@@ -1,4 +1,4 @@
-# Pre-release & post-release sentiment analysis of movies and rate the movie based on the sentiment
+# Pre-release & post-release sentiment analysis of movies.
 
 Sentiment analysis is the interpretation and classification of emotions (positive, negative and neutral) within text data using text analysis techniques. Sentiment analysis allows businesses to identify customer sentiment toward products, brands or services in online conversations and feedback. This paper uses sentiment analysis and prediction algorithms to analyze the sentiment of people pre and post release of movie. Large number of people are participating in social media to give their reviews or opinion about various topics. It is very difficult to go through all the views regularly posted for a movie in different social network sites. In this paper we have used Twitter sentiment analysis which is tricky as compared to broad sentiment analysis because of the slang words and misspellings and repeated characters. We know that the maximum length of each tweet in Twitter is 140 characters. So, it is very important to identify correct sentiment of each word. 
 
